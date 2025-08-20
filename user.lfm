@@ -1,0 +1,103 @@
+object Form3: TForm3
+  Left = 274
+  Height = 295
+  Top = 32
+  Width = 480
+  Caption = 'Form3'
+  ClientHeight = 295
+  ClientWidth = 480
+  object Button1: TButton
+    Left = 160
+    Height = 25
+    Top = 48
+    Width = 136
+    Caption = 'Bandeja_Entrada'
+    TabOrder = 0
+    OnClick = Button1Click
+  end
+  object Button2: TButton
+    Left = 48
+    Height = 25
+    Top = 96
+    Width = 163
+    Caption = 'Enviar_Correo'
+    TabOrder = 1
+    OnClick = Button2Click
+  end
+  object Button3: TButton
+    Left = 48
+    Height = 25
+    Top = 144
+    Width = 163
+    Caption = 'Papelera'
+    TabOrder = 2
+    OnClick = Button3Click
+  end
+  object Button4: TButton
+    Left = 48
+    Height = 25
+    Top = 184
+    Width = 163
+    Caption = 'Programar_Correo'
+    TabOrder = 3
+    OnClick = Button4Click
+  end
+  object Button5: TButton
+    Left = 48
+    Height = 25
+    Top = 232
+    Width = 163
+    Caption = 'Correos_Programados'
+    TabOrder = 4
+    OnClick = Button5Click
+  end
+  object Button6: TButton
+    Left = 264
+    Height = 25
+    Top = 96
+    Width = 144
+    Caption = 'Agregar_Contacto'
+    TabOrder = 5
+    OnClick = Button6Click
+  end
+  object Button7: TButton
+    Left = 272
+    Height = 25
+    Top = 144
+    Width = 136
+    Caption = 'Contactos'
+    TabOrder = 6
+    OnClick = Button7Click
+  end
+  object Button8: TButton
+    Left = 272
+    Height = 25
+    Top = 184
+    Width = 136
+    Caption = 'Actualizar_Perfil'
+    TabOrder = 7
+    OnClick = Button8Click
+  end
+  object Button9: TButton
+    Left = 272
+    Height = 25
+    Top = 232
+    Width = 136
+    Caption = 'Generar_Reportes'
+    TabOrder = 8
+    OnClick = Button9Click
+  end
+  object Label1: TLabel
+    Left = 16
+    Height = 21
+    Top = 16
+    Width = 94
+    Caption = 'Hola Alumno'
+    Color = clBlack
+    Font.Height = -16
+    Font.Name = 'Symbola'
+    Font.Style = [fsBold, fsItalic]
+    ParentColor = False
+    ParentFont = False
+  end
+end
