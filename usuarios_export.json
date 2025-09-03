@@ -1,0 +1,90 @@
+[
+  {
+    "id" : 11,
+    "nombre" : "Ian Murdock",
+    "usuario" : "imurdock",
+    "password" : "imurdock123",
+    "email" : "imurdock@edd.com",
+    "telefono" : "41235678"
+  },
+  {
+    "id" : 10,
+    "nombre" : "Mitchell Baker",
+    "usuario" : "mbaker",
+    "password" : "mbaker123",
+    "email" : "mbaker@edd.com",
+    "telefono" : "19384756"
+  },
+  {
+    "id" : 9,
+    "nombre" : "Karen Sandler",
+    "usuario" : "ksandler",
+    "password" : "ksandler123",
+    "email" : "ksandler@edd.com",
+    "telefono" : "89514362"
+  },
+  {
+    "id" : 8,
+    "nombre" : "Jon Corbet",
+    "usuario" : "jcorbet",
+    "password" : "jcorbet123",
+    "email" : "jcorbet@edd.com",
+    "telefono" : "75849231"
+  },
+  {
+    "id" : 7,
+    "nombre" : "Brian Fox",
+    "usuario" : "bfox",
+    "password" : "bfox123",
+    "email" : "bfox@edd.com",
+    "telefono" : "64578231"
+  },
+  {
+    "id" : 6,
+    "nombre" : "Steven Mejia",
+    "usuario" : "smejia",
+    "password" : "smejia123",
+    "email" : "smejia@edd.com",
+    "telefono" : "23419875"
+  },
+  {
+    "id" : 5,
+    "nombre" : "Mark Shuttleworth",
+    "usuario" : "mshuttleworth",
+    "password" : "mshuttleworth123",
+    "email" : "mshuttleworth@edd.com",
+    "telefono" : "76018423"
+  },
+  {
+    "id" : 4,
+    "nombre" : "Greg Kroah-Hartman",
+    "usuario" : "gkroah-hartman",
+    "password" : "gkroah-hartman123",
+    "email" : "gkroah-hartman@edd.com",
+    "telefono" : "31628954"
+  },
+  {
+    "id" : 3,
+    "nombre" : "Marcos Itzep",
+    "usuario" : "mitzep",
+    "password" : "mitzep123",
+    "email" : "mitzep@edd.com",
+    "telefono" : "87654321"
+  },
+  {
+    "id" : 2,
+    "nombre" : "Luis Garcia",
+    "usuario" : "lgarcia",
+    "password" : "lgarcia123",
+    "email" : "lgarcia@edd.com",
+    "telefono" : "12345678"
+  },
+  {
+    "id" : 1,
+    "nombre" : "root",
+    "usuario" : "root",
+    "password" : "root123",
+    "email" : "root@edd.com",
+    "telefono" : ""
+  }
+]

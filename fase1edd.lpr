@@ -3,28 +3,21 @@ program fase1edd;
 {$mode objfpc}{$H+}
 
 uses
-  {$IFDEF UNIX}
+  {$IFDEF UNIX}{$IFDEF UseCThreads}
   cthreads,
-  {$ENDIF}
-  {$IFDEF HASAMIGA}
-  athreads,
-  {$ENDIF}
-  Interfaces, // this includes the LCL widgetset
-  Forms, logeo, root, user
-  { you can add units after this };
+  {$ENDIF}{$ENDIF}
+  Interfaces, // LCL primero
+  Forms,
+  logeo,  // Form1 (login) y estructuras
+  root,   // Form2 (root)
+  user;   // Form3 (usuario estándar)
 
 {$R *.res}
 
 begin
-  RequireDerivedFormResource:=True;
-  Application.Scaled:=True;
-  {$PUSH}{$WARN 5044 OFF}
-  Application.MainFormOnTaskbar:=True;
-  {$POP}
+  RequireDerivedFormResource := True;
   Application.Initialize;
-  Application.CreateForm(TForm1, Form1);
-  Application.CreateForm(TForm2, Form2);
-  Application.CreateForm(TForm3, Form3);
+  Application.CreateForm(TForm1, Form1); // solo auto-creamos el login
   Application.Run;
 end.
 
