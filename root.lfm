@@ -6,6 +6,7 @@ object Form2: TForm2
   Caption = 'Form2'
   ClientHeight = 301
   ClientWidth = 435
+  LCLVersion = '4.2.0.0'
   object Label1: TLabel
     Left = 120
     Height = 19
