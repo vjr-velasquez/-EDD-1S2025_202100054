@@ -7,7 +7,7 @@ interface
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, StdCtrls,
   fpjson, jsonparser, Process, LCLIntf,
-  logeo; // estructuras y APIs exportadas desde logeo.pas
+  logeo,uComunidades,uUsuariosAPI,comunidad; // estructuras y APIs exportadas desde logeo.pas
 
 type
   { TForm2 (Root) }
@@ -16,16 +16,17 @@ type
     Button2: TButton; // Reportes Usuarios
     Button3: TButton; // Reporte de Relaciones (matriz)
     Button4: TButton; // Regresar a login
-    Button5: TButton; // Comunidades (ventana minimalista)
+    comunidades: TButton; // Comunidades (ventana minimalista)
     Button6: TButton; // Inbox por usuario (reporte)
     Label1: TLabel;
+    procedure comunidadesClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
     procedure Button3Click(Sender: TObject);
     procedure Button4Click(Sender: TObject);
-    procedure Button5Click(Sender: TObject);
     procedure Button6Click(Sender: TObject);
+    procedure repoComunidadesClick(Sender: TObject);
   private
     function ReportDir: string;
     procedure EnsureCommunitiesButton;
@@ -78,17 +79,16 @@ end;
 
 procedure TForm2.EnsureCommunitiesButton;
 begin
-  // Si el .lfm no trae el Button5, lo creamos (y lo movemos un poco a la derecha)
-  if Button5 = nil then
+  // Si el .lfm no trae el comunidades, lo creamos (y lo movemos un poco a la derecha)
+  if comunidades = nil then
   begin
-    Button5 := TButton.Create(Self);
-    Button5.Parent := Self;
+    comunidades := TButton.Create(Self);
+    comunidades.Parent := Self;
   end;
-  Button5.Caption := 'Comunidades';
-  Button5.Left := 260; // más a la derecha
-  Button5.Top  := 190;
-  Button5.Width := 160;
-  Button5.OnClick := @Button5Click;
+  comunidades.Caption := 'Comunidades';
+  comunidades.Left := 260; // más a la derecha
+  comunidades.Top  := 190;
+  comunidades.Width := 160;
 end;
 
 procedure TForm2.EnsureInboxButton;
@@ -110,6 +110,13 @@ begin
   EnsureCommunitiesButton;
   EnsureInboxButton;
   ReportDir;
+end;
+//boton para abrir las comunidades
+procedure TForm2.comunidadesClick(Sender: TObject);
+begin
+  comunidad.Form4.Show;
+  Self.Hide;
+
 end;
 
 {================== Carga masiva usuarios ==================}
@@ -223,138 +230,9 @@ end;
 {================== Regresar al login ==================}
 procedure TForm2.Button4Click(Sender: TObject);
 begin
-  if Assigned(Form1) then Form1.Show;
+  logeo.Form1.Show;
   Self.Hide;
 end;
-
-{================== Ventana COMUNIDADES minimalista ==================}
-
-type
-  TComMiniWin = class(TForm)
-  private
-    btnBack, btnCrear, btnAgregar: TButton;
-    lblTitulo, lblNom, lblCom, lblCor: TLabel;
-    edtNom, edtCom, edtCor: TEdit;
-    procedure DoCrear(Sender: TObject);
-    procedure DoAgregar(Sender: TObject);
-    function FindComunidad(const Nombre: string): PComunidad;
-  public
-    constructor CreateMinimal(AOwner: TComponent);
-  end;
-
-constructor TComMiniWin.CreateMinimal(AOwner: TComponent);
-begin
-  inherited CreateNew(AOwner, 1);
-  Caption := 'formComunidad';
-  Position := poScreenCenter;
-  Width := 360; Height := 470;
-
-  // Botón Regresar
-  btnBack := TButton.Create(Self); btnBack.Parent := Self;
-  btnBack.Caption := 'Regresar';
-  btnBack.Left := 16; btnBack.Top := 16; btnBack.Width := 80;
-  btnBack.ModalResult := mrClose;
-
-  // Título "Comunidades"
-  lblTitulo := TLabel.Create(Self); lblTitulo.Parent := Self;
-  lblTitulo.Caption := 'Comunidades';
-  lblTitulo.Left := 120; lblTitulo.Top := 20;
-
-  // Nombre
-  lblNom := TLabel.Create(Self); lblNom.Parent := Self;
-  lblNom.Caption := 'Nombre';
-  lblNom.Left := 16; lblNom.Top := 70;
-
-  edtNom := TEdit.Create(Self); edtNom.Parent := Self;
-  edtNom.Left := 120; edtNom.Top := 64; edtNom.Width := 200;
-
-  btnCrear := TButton.Create(Self); btnCrear.Parent := Self;
-  btnCrear.Caption := 'Crear';
-  btnCrear.Left := 120; btnCrear.Top := 100; btnCrear.Width := 90;
-  btnCrear.OnClick := @DoCrear;
-
-  // Comunidad
-  lblCom := TLabel.Create(Self); lblCom.Parent := Self;
-  lblCom.Caption := 'Comunidad';
-  lblCom.Left := 16; lblCom.Top := 160;
-
-  edtCom := TEdit.Create(Self); edtCom.Parent := Self;
-  edtCom.Left := 120; edtCom.Top := 154; edtCom.Width := 200;
-
-  // Correo
-  lblCor := TLabel.Create(Self); lblCor.Parent := Self;
-  lblCor.Caption := 'Correo';
-  lblCor.Left := 16; lblCor.Top := 210;
-
-  edtCor := TEdit.Create(Self); edtCor.Parent := Self;
-  edtCor.Left := 120; edtCor.Top := 204; edtCor.Width := 200;
-
-  btnAgregar := TButton.Create(Self); btnAgregar.Parent := Self;
-  btnAgregar.Caption := 'Agregar';
-  btnAgregar.Left := 120; btnAgregar.Top := 244; btnAgregar.Width := 90;
-  btnAgregar.OnClick := @DoAgregar;
-end;
-
-function TComMiniWin.FindComunidad(const Nombre: string): PComunidad;
-begin
-  Result := FindComunidadByName(Nombre);
-end;
-
-procedure TComMiniWin.DoCrear(Sender: TObject);
-var C: PComunidad;
-begin
-  if Trim(edtNom.Text) = '' then
-  begin
-    ShowMessage('Ingrese un nombre de comunidad.'); Exit;
-  end;
-  C := CrearComunidad(Trim(edtNom.Text));
-  if C = nil then
-    ShowMessage('No se pudo crear (vacío o duplicado).')
-  else
-  begin
-    ShowMessage('Comunidad "' + C^.Nombre + '" creada.');
-    edtNom.Clear;
-  end;
-end;
-
-procedure TComMiniWin.DoAgregar(Sender: TObject);
-var
-  C: PComunidad;
-  nomC, em: string;
-begin
-  nomC := Trim(edtCom.Text);
-  em   := Trim(edtCor.Text);
-  if (nomC = '') or (em = '') then
-  begin
-    ShowMessage('Complete "Comunidad" y "Correo".'); Exit;
-  end;
-
-  C := FindComunidad(nomC);
-  if C = nil then
-  begin
-    ShowMessage('No existe la comunidad "' + nomC + '".'); Exit;
-  end;
-
-  if AgregarMiembroComunidad(C, em) then
-  begin
-    ShowMessage('Agregado ' + em + ' a "' + C^.Nombre + '".');
-    edtCor.Clear;
-  end
-  else
-    ShowMessage('No se pudo agregar (usuario inexistente o duplicado).');
-end;
-
-procedure TForm2.Button5Click(Sender: TObject);
-var W: TComMiniWin;
-begin
-  W := TComMiniWin.CreateMinimal(Self);
-  try
-    W.ShowModal;
-  finally
-    W.Free;
-  end;
-end;
-
 {================== Reporte inbox por usuario ==================}
 procedure TForm2.Button6Click(Sender: TObject);
 
@@ -392,6 +270,13 @@ begin
   end
   else
     ShowMessage('No se pudo ejecutar "dot". Instala Graphviz: sudo apt install graphviz -y');
+end;
+
+procedure TForm2.repoComunidadesClick(Sender: TObject);
+begin
+  // Genera DOT y PNG en la carpeta "Root-Reportes" junto al exe
+  Comunidades_ReportePNG(ExtractFilePath(ParamStr(0)) + 'Root-Reportes');
+  ShowMessage('Reporte de comunidades generado en Root-Reportes/.');
 end;
 
 end.

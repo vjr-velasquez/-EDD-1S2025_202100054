@@ -119,16 +119,8 @@ var
 function BuscarUsuarioPorEmail(const AEmail: string): PUsuario;
 procedure AgregarUsuario(const ANombre, AUsuario, AEmail, ATelefono, APassword: string);
 
-// —— Comunidades ——
-function CrearComunidad(const ANombre: string): PComunidad;
-function EliminarComunidad(const ANombre: string): Boolean;
-function AgregarMiembroComunidad(C: PComunidad; const AEmail: string): Boolean;
-function EliminarMiembroComunidad(C: PComunidad; const AEmail: string): Boolean;
-procedure ListarComunidades(out S: string);
 
 // —— Reportes Graphviz ——
-function ExportarComunidadesDOT(const Path: string): Boolean;         // lista de listas
-function ExportarComunidadesMatrizDOT(const Path: string): Boolean;   // vista tipo matriz
 function ExportarUsuariosDOT(const Path: string): Boolean;            // lista simple de usuarios
 function ExportarInboxDOT(U: PUsuario; const Path: string): Boolean; overload; // lista doble (inbox)
 function ExportarInboxDOT(const Email, Path: string): Boolean; overload;
@@ -302,121 +294,6 @@ begin
   AgregarUsuario('', '', email, '', password);
   ShowMessage('Usuario registrado con éxito. Ahora puede iniciar sesión.');
 end;
-
-{====================== COMUNIDADES ======================}
-function BuscarComunidad(const ANombre: string): PComunidad;
-var C: PComunidad;
-begin
-  Result := nil;
-  C := ComunidadesHead;
-  while C <> nil do
-  begin
-    if EqualCI(C^.Nombre, ANombre) then Exit(C);
-    C := C^.Next;
-  end;
-end;
-
-function CrearComunidad(const ANombre: string): PComunidad;
-var N: PComunidad;
-begin
-  Result := nil;
-  if Trim(ANombre) = '' then Exit;
-  if BuscarComunidad(ANombre) <> nil then Exit;
-  New(N);
-  N^.Id := NextComunidadId; Inc(NextComunidadId);
-  N^.Nombre := ANombre;
-  N^.Miembros := nil;
-  N^.Next := ComunidadesHead;
-  ComunidadesHead := N;
-  Result := N;
-end;
-
-function EliminarComunidad(const ANombre: string): Boolean;
-var C, Prev: PComunidad; M, T: PMember;
-begin
-  Result := False;
-  Prev := nil; C := ComunidadesHead;
-  while C <> nil do
-  begin
-    if EqualCI(C^.Nombre, ANombre) then
-    begin
-      M := C^.Miembros;
-      while M <> nil do begin T := M^.Next; Dispose(M); M := T; end;
-      if Prev = nil then ComunidadesHead := C^.Next else Prev^.Next := C^.Next;
-      Dispose(C);
-      Exit(True);
-    end;
-    Prev := C; C := C^.Next;
-  end;
-end;
-
-function MiembroExiste(C: PComunidad; const AEmail: string): Boolean;
-var M: PMember;
-begin
-  Result := False;
-  if (C = nil) or (Trim(AEmail) = '') then Exit;
-  M := C^.Miembros;
-  while M <> nil do
-  begin
-    if EqualCI(M^.Email, AEmail) then Exit(True);
-    M := M^.Next;
-  end;
-end;
-
-function AgregarMiembroComunidad(C: PComunidad; const AEmail: string): Boolean;
-var M: PMember;
-begin
-  Result := False;
-  if (C = nil) or (Trim(AEmail) = '') then Exit;
-  if BuscarUsuarioPorEmail(AEmail) = nil then Exit; // debe existir el usuario
-  if MiembroExiste(C, AEmail) then Exit;            // no duplicados
-  New(M);
-  M^.Email := AEmail;
-  M^.Next := C^.Miembros;
-  C^.Miembros := M;
-  Result := True;
-end;
-
-function EliminarMiembroComunidad(C: PComunidad; const AEmail: string): Boolean;
-var M, Prev: PMember;
-begin
-  Result := False;
-  if (C = nil) then Exit;
-  Prev := nil; M := C^.Miembros;
-  while M <> nil do
-  begin
-    if EqualCI(M^.Email, AEmail) then
-    begin
-      if Prev = nil then C^.Miembros := M^.Next else Prev^.Next := M^.Next;
-      Dispose(M);
-      Exit(True);
-    end;
-    Prev := M; M := M^.Next;
-  end;
-end;
-
-procedure ListarComunidades(out S: string);
-var C: PComunidad; M: PMember;
-begin
-  S := '';
-  C := ComunidadesHead;
-  while C <> nil do
-  begin
-    S += Format('Comunidad #%d: %s', [C^.Id, C^.Nombre]) + LineEnding;
-    M := C^.Miembros;
-    if M = nil then S += '  (sin miembros)' + LineEnding
-    else
-      while M <> nil do
-      begin
-        S += '  - ' + M^.Email + LineEnding;
-        M := M^.Next;
-      end;
-    S += LineEnding;
-    C := C^.Next;
-  end;
-  if S = '' then S := '(no hay comunidades)';
-end;
-
 {====================== REPORTES GRAPHVIZ ======================}
 
 function ExportarComunidadesDOT(const Path: string): Boolean;
