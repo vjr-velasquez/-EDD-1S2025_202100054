@@ -1,0 +1,36 @@
+digraph BST {
+    node [shape=box, style=rounded, fontname="Arial"];
+    edge [fontname="Arial"];
+    rankdir=TB;
+    bgcolor=lightgray;
+    
+    35 [label="ID: 35\nNombre: Chicky Egle of Germany\nEmail: cegleofgermany0@paginegialle.it"];
+    35 -> 22 [color=red, label="L"];
+    22 [label="ID: 22\nNombre: Elane Antonik\nEmail: eantonik2@army.mil"];
+    22 -> 16 [color=red, label="L"];
+    16 [label="ID: 16\nNombre: Thomasa Olphert\nEmail: tolphert3@senate.gov"];
+    16 -> 13 [color=red, label="L"];
+    13 [label="ID: 13\nNombre: Tamas Hedney\nEmail: thedney5@deliciousdays.com"];
+    13 -> 1 [color=red, label="L"];
+    1 [label="ID: 1\nNombre: Stanton Whiston\nEmail: swhistona@amazon.de"];
+    13 -> 14 [color=blue, label="R"];
+    14 [label="ID: 14\nNombre: Elwood Corwood\nEmail: ecorwoode@dagondesign.com"];
+    16 -> 19 [color=blue, label="R"];
+    19 [label="ID: 19\nNombre: Saxe Spencelayh\nEmail: sspencelayh9@xrea.com"];
+    22 -> 23 [color=blue, label="R"];
+    23 [label="ID: 23\nNombre: Kennedy Beedham\nEmail: kbeedham8@jimdo.com"];
+    23 -> 28 [color=blue, label="R"];
+    28 [label="ID: 28\nNombre: Enoch Flanders\nEmail: eflandersc@alexa.com"];
+    28 -> 30 [color=blue, label="R"];
+    30 [label="ID: 30\nNombre: Ramsay Dallin\nEmail: rdallind@imageshack.us"];
+    35 -> 60 [color=blue, label="R"];
+    60 [label="ID: 60\nNombre: Norine Sindle\nEmail: nsindle1@wp.com"];
+    60 -> 50 [color=red, label="L"];
+    50 [label="ID: 50\nNombre: Linzy Kerne\nEmail: lkerne4@globo.com"];
+    50 -> 49 [color=red, label="L"];
+    49 [label="ID: 49\nNombre: Carrissa Elwyn\nEmail: celwyn6@uol.com.br"];
+    49 -> 43 [color=red, label="L"];
+    43 [label="ID: 43\nNombre: Lexine Dempsey\nEmail: ldempsey7@pcworld.com"];
+    60 -> 82 [color=blue, label="R"];
+    82 [label="ID: 82\nNombre: Lyndell Jeune\nEmail: ljeuneb@meetup.com"];
+}
