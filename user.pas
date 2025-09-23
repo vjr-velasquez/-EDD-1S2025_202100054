@@ -12,6 +12,9 @@ type
   { TForm3 }
   TForm3 = class(TForm)
     Button1: TButton; // Bandeja de Entrada
+    Button10: TButton; // Borradores
+    Button11: TButton;
+    Button12: TButton;
     Button2: TButton; // Enviar Correo
     Button3: TButton; // Papelera
     Button4: TButton; // Contactos
@@ -21,6 +24,8 @@ type
     Button8: TButton; // Generar Reportes
     Button9: TButton; // Cerrar Sesión
     Label1: TLabel;
+    procedure Button10Click(Sender: TObject);
+    procedure Button11Click(Sender: TObject);
     procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
     procedure Button3Click(Sender: TObject);
@@ -30,7 +35,7 @@ type
     procedure Button7Click(Sender: TObject);
     procedure Button8Click(Sender: TObject);
     procedure Button9Click(Sender: TObject);
-  protected
+  public // <- pública para evitar la nota de visibilidad
     procedure AfterConstruction; override;
   private
     procedure SafeMsg(const S: string);
@@ -40,7 +45,6 @@ type
                           const AFecha: TDateTime; AProgramado: Boolean; const AEstado: string);
     procedure PushTrash(U: Pointer; const M);
     procedure IncRel(const FromEmail, ToEmail: string);
-  public
   end;
 
 var
@@ -49,7 +53,7 @@ var
 implementation
 
 uses
-  logeo; // aquí están las estructuras y variables globales
+  logeo, uTypes, uAVLDrafts, uBFavorites;
 
 {$R *.lfm}
 
@@ -155,8 +159,9 @@ begin
 end;
 
 {================= Subventanas =================}
-
 type
+
+
   TInboxWin = class(TForm)
   private
     U: PUsuario;
@@ -292,6 +297,9 @@ type
   public
     constructor CreateSimple(AOwner: TComponent);
   end;
+
+
+
 
 {--- Inbox ---}
 
@@ -1590,6 +1598,8 @@ begin
   Button7.OnClick := @Button7Click;
   Button8.OnClick := @Button8Click;
   Button9.OnClick := @Button9Click;
+  // Button10 se asigna en el diseñador o aquí si quieres:
+  if Assigned(Button10) then Button10.OnClick := @Button10Click;
 end;
 
 procedure TForm3.Button1Click(Sender: TObject);
@@ -1599,6 +1609,63 @@ begin
   F := TInboxWin.CreateForUser(Self, CurrentUser);
   try F.ShowModal; finally F.Free; end;
 end;
+
+procedure TForm3.Button10Click(Sender: TObject);
+
+begin
+
+end;
+
+procedure TForm3.Button11Click(Sender: TObject);
+var
+  K: TFavKey;
+  M: PMail;
+  Dir, DotPath, PngPath: string;
+begin
+  if CurrentUser = nil then
+  begin
+    SafeMsg('Inicie sesión.');
+    Exit;
+  end;
+
+  // Crea el árbol B si aún no existe (grado 3 recomendado)
+  if Favorites = nil then
+    Favorites := TBFavorites.Create(3);
+
+  // (Opcional) Limpiar el árbol antes de recargarlo
+  Favorites.Clear;
+
+  // Cargamos como "favoritos" los correos de la bandeja (ejemplo: todos)
+  M := CurrentUser^.InboxHead;
+  while M <> nil do
+  begin
+    K.ID     := M^.Id;
+    K.Asunto := M^.Asunto;
+    Favorites.Insert(K);
+    M := M^.Next;
+  end;
+
+  // Exportar y renderizar Graphviz
+  Dir := IncludeTrailingPathDelimiter(GetCurrentDir) + 'Reportes';
+  if not DirectoryExists(Dir) then CreateDir(Dir);
+
+  DotPath := Dir + PathDelim + 'favoritos.dot';
+  PngPath := Dir + PathDelim + 'favoritos.png';
+
+  Favorites.SaveDOT(DotPath);
+
+  if RenderizarPNGConDot(DotPath, PngPath) then
+  begin
+    if not OpenDocument(PngPath) then
+      ShowMessage('Imagen generada: ' + PngPath);
+  end
+  else
+    ShowMessage('DOT exportado: ' + DotPath + LineEnding +
+                'Para PNG instala Graphviz: sudo apt install graphviz -y');
+end;
+
+
+
 
 procedure TForm3.Button2Click(Sender: TObject);
 var F: TSendWin;

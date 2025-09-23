@@ -2,10 +2,10 @@ object Form2: TForm2
   Left = 880
   Height = 301
   Top = 32
-  Width = 435
+  Width = 498
   Caption = 'Form2'
   ClientHeight = 301
-  ClientWidth = 435
+  ClientWidth = 498
   object Label1: TLabel
     Left = 120
     Height = 19
@@ -50,21 +50,30 @@ object Form2: TForm2
     OnClick = Button4Click
   end
   object comunidades: TButton
-    Left = 280
+    Left = 272
     Height = 40
-    Top = 160
+    Top = 72
     Width = 120
     Caption = 'comunidades'
     TabOrder = 4
     OnClick = comunidadesClick
   end
   object repoComunidades: TButton
-    Left = 275
+    Left = 62
     Height = 37
-    Top = 235
+    Top = 256
     Width = 141
     Caption = 'repoComunidades'
     TabOrder = 5
     OnClick = repoComunidadesClick
+  end
+  object Button5: TButton
+    Left = 264
+    Height = 57
+    Top = 192
+    Width = 200
+    Caption = 'ver Mensajes Comunidades'
+    TabOrder = 6
+    OnClick = Button5Click
   end
 end

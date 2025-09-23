@@ -70,7 +70,13 @@
         <Filename Value="comunidad.pas"/>
         <IsPartOfProject Value="True"/>
         <ComponentName Value="Form4"/>
+        <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
+      </Unit>
+      <Unit>
+        <Filename Value="ubfavorites.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="uBFavorites"/>
       </Unit>
     </Units>
   </ProjectOptions>

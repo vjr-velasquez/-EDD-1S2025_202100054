@@ -11,7 +11,7 @@ uses
   logeo,  // Form1 (login) y estructuras
   root,   // Form2 (root)
   user, uUsuariosAPI, uUsuariosAPI_VictorAdapter, uComunidades,
-  comunidad;
+  comunidad, uBFavorites;
 
 {$R *.res}
 

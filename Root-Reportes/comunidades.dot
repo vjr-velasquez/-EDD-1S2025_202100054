@@ -3,10 +3,17 @@ digraph Comunidades {
   graph [nodesep=0.6, ranksep=1.0, splines=ortho];
   node  [shape=box, style=filled, fontname="Arial"];
 
-  C1 [label="comunidad1", fillcolor="#b3d9f2"];
+  C2 [label="Amigos", fillcolor="#b3d9f2"];
+  C1 [label="Uni", fillcolor="#b3d9f2"];
+  C2 -> C1;
 
   node [fillcolor="#fff9c4"];
-  U_C1_1_lgarcia_edd_com [label="lgarcia@edd.com"];
-  C1 -> U_C1_1_lgarcia_edd_com;
+  U_C2_1_mitzep_edd_com [label="mitzep@edd.com"];
+  U_C2_2_calificacion_edd_com [label="calificacion@edd.com"];
+  U_C2_1_mitzep_edd_com -> U_C2_2_calificacion_edd_com;
+  C2 -> U_C2_1_mitzep_edd_com;
+
+  U_C1_1_mitzep_edd_com [label="mitzep@edd.com"];
+  C1 -> U_C1_1_mitzep_edd_com;
 
 }
