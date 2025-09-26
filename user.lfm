@@ -104,7 +104,7 @@ object Form3: TForm3
     Left = 464
     Height = 25
     Top = 96
-    Width = 120
+    Width = 128
     Caption = 'Borradores'
     TabOrder = 9
     OnClick = Button10Click

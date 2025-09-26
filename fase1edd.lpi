@@ -78,6 +78,11 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="uBFavorites"/>
       </Unit>
+      <Unit>
+        <Filename Value="uavl.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="uAVL"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

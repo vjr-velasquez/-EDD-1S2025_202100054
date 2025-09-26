@@ -11,18 +11,18 @@ uses
 type
   { TForm3 }
   TForm3 = class(TForm)
-    Button1: TButton; // Bandeja de Entrada
-    Button10: TButton; // Borradores
-    Button11: TButton;
+    Button1: TButton;  // Bandeja de Entrada
+    Button10: TButton; // Borradores (AVL)
+    Button11: TButton; // Favoritos (Árbol B)
     Button12: TButton;
-    Button2: TButton; // Enviar Correo
-    Button3: TButton; // Papelera
-    Button4: TButton; // Contactos
-    Button5: TButton; // Programar Correo
-    Button6: TButton; // Correos Programados
-    Button7: TButton; // Actualizar Perfil
-    Button8: TButton; // Generar Reportes
-    Button9: TButton; // Cerrar Sesión
+    Button2: TButton;  // Enviar Correo
+    Button3: TButton;  // Papelera
+    Button4: TButton;  // Contactos
+    Button5: TButton;  // Programar Correo
+    Button6: TButton;  // Correos Programados
+    Button7: TButton;  // Actualizar Perfil
+    Button8: TButton;  // Generar Reportes
+    Button9: TButton;  // Cerrar Sesión
     Label1: TLabel;
     procedure Button10Click(Sender: TObject);
     procedure Button11Click(Sender: TObject);
@@ -35,7 +35,7 @@ type
     procedure Button7Click(Sender: TObject);
     procedure Button8Click(Sender: TObject);
     procedure Button9Click(Sender: TObject);
-  public // <- pública para evitar la nota de visibilidad
+  public
     procedure AfterConstruction; override;
   private
     procedure SafeMsg(const S: string);
@@ -53,7 +53,7 @@ var
 implementation
 
 uses
-  logeo, uTypes, uAVLDrafts, uBFavorites;
+  logeo, uTypes, uAVLDrafts, uBFavorites, uAVL; // uAVL = AVL de borradores
 
 {$R *.lfm}
 
@@ -160,8 +160,6 @@ end;
 
 {================= Subventanas =================}
 type
-
-
   TInboxWin = class(TForm)
   private
     U: PUsuario;
@@ -285,7 +283,6 @@ type
     function EscapeDOT(const S: string): string;
     procedure GenReports(Sender: TObject);
     procedure OpenMatrix(Sender: TObject);
-    // DOTs de todas las estructuras:
     procedure ExportAllDOTs(Sender: TObject);
     procedure RenderAllPNGs(Sender: TObject);
     procedure WriteDOT_Inbox(U: PUsuario; const Path: string);
@@ -298,8 +295,47 @@ type
     constructor CreateSimple(AOwner: TComponent);
   end;
 
+  // === NUEVA SUBVENTANA: Favoritos (Árbol B) ===
+  TFavoritesWin = class(TForm)
+  private
+    U: PUsuario;
+    LV: TListView;
+    pnlBottom: TPanel;
+    btnSelAll, btnClear, btnGuardar, btnVerPNG, btnCerrar: TButton;
+    procedure LoadInbox;
+    procedure SelectAll(Sender: TObject);
+    procedure ClearAll(Sender: TObject);
+    procedure SaveFavorites(Sender: TObject);
+    procedure OpenPNG(Sender: TObject);
+  public
+    constructor CreateForUser(AOwner: TComponent; AUser: PUsuario);
+  end;
 
-
+  // === BORRADORES (AVL) ===
+  TDraftsWin = class(TForm)
+  private
+    LV: TListView;
+    pnlTop, pnlBottom: TPanel;
+    lblID, lblRem, lblDest, lblAsu, lblRec: TLabel;
+    lblEst, lblFec: TLabel;
+    edtID, edtRem, edtDest, edtAsu: TEdit;
+    edtEst, edtFec: TEdit;
+    memoMsg: TMemo;
+    cmbRec: TComboBox;
+    btnNuevo, btnGuardar, btnEliminar, btnEnviar, btnExportDOT, btnVerPNG, btnCerrar: TButton;
+    procedure LoadList(Sender: TObject);
+    function ReadDraftFromForm(out D: TDraft): Boolean;
+    procedure Nuevo(Sender: TObject);
+    procedure Guardar(Sender: TObject);
+    procedure Eliminar(Sender: TObject);
+    procedure Enviar(Sender: TObject);
+    procedure ExportDOT(Sender: TObject);
+    procedure VerPNG(Sender: TObject);
+    procedure OnSelect(Sender: TObject; Item: TListItem; Selected: Boolean);
+    function ReportDir: string;
+  public
+    constructor CreateSimple(AOwner: TComponent);
+  end;
 
 {--- Inbox ---}
 
@@ -1562,7 +1598,6 @@ var
 begin
   dir := ReportDir; safe := SafeEmail(CurrentUser^.Email);
 
-  // Si no existen, primero los exportamos
   if not FileExists(dir + PathDelim + 'inbox_' + safe + '.dot') then ExportAllDOTs(nil);
 
   RenderOnePNG(dir + PathDelim + 'inbox_' + safe + '.dot');
@@ -1574,32 +1609,421 @@ begin
   ShowMessage('PNGs generados');
 end;
 
+{--- FAVORITOS (Árbol B) ---}
+
+constructor TFavoritesWin.CreateForUser(AOwner: TComponent; AUser: PUsuario);
+begin
+  inherited CreateNew(AOwner, 1);
+  U := AUser;
+  Caption := 'Seleccionar favoritos (Árbol B)';
+  Position := poScreenCenter; Width := 820; Height := 520;
+
+  LV := TListView.Create(Self);
+  LV.Parent := Self; LV.Align := alClient;
+  LV.ViewStyle := vsReport; LV.ReadOnly := True; LV.RowSelect := True; LV.GridLines := True;
+  LV.CheckBoxes := True;
+  with LV.Columns.Add do begin Caption := 'Id'; Width := 60; end;
+  with LV.Columns.Add do begin Caption := 'Asunto'; Width := 680; end;
+
+  pnlBottom := TPanel.Create(Self);
+  pnlBottom.Parent := Self; pnlBottom.Align := alBottom; pnlBottom.Height := 44;
+
+  btnSelAll := TButton.Create(Self);
+  btnSelAll.Parent := pnlBottom; btnSelAll.Caption := 'Seleccionar todo';
+  btnSelAll.Left := 8; btnSelAll.Top := 8; btnSelAll.Width := 130;
+  btnSelAll.OnClick := @SelectAll;
+
+  btnClear := TButton.Create(Self);
+  btnClear.Parent := pnlBottom; btnClear.Caption := 'Limpiar selección';
+  btnClear.Left := 146; btnClear.Top := 8; btnClear.Width := 130;
+  btnClear.OnClick := @ClearAll;
+
+  btnGuardar := TButton.Create(Self);
+  btnGuardar.Parent := pnlBottom; btnGuardar.Caption := 'Guardar en Árbol B y Graficar';
+  btnGuardar.Left := 284; btnGuardar.Top := 8; btnGuardar.Width := 220;
+  btnGuardar.OnClick := @SaveFavorites;
+
+  btnVerPNG := TButton.Create(Self);
+  btnVerPNG.Parent := pnlBottom; btnVerPNG.Caption := 'Abrir PNG';
+  btnVerPNG.Left := 512; btnVerPNG.Top := 8; btnVerPNG.Width := 100;
+  btnVerPNG.OnClick := @OpenPNG;
+
+  btnCerrar := TButton.Create(Self);
+  btnCerrar.Parent := pnlBottom; btnCerrar.Caption := 'Cerrar';
+  btnCerrar.Left := 720; btnCerrar.Top := 8; btnCerrar.Width := 80;
+  btnCerrar.ModalResult := mrClose;
+
+  LoadInbox;
+end;
+
+procedure TFavoritesWin.LoadInbox;
+var
+  M: PMail;
+  it: TListItem;
+begin
+  LV.Items.BeginUpdate;
+  try
+    LV.Items.Clear;
+    if (U = nil) then Exit;
+    M := U^.InboxHead;
+    while M <> nil do
+    begin
+      it := LV.Items.Add;
+      it.Caption := IntToStr(M^.Id);
+      it.SubItems.Add(M^.Asunto);
+      it.Data := M;
+      it.Checked := False;
+      M := M^.Next;
+    end;
+  finally
+    LV.Items.EndUpdate;
+  end;
+end;
+
+procedure TFavoritesWin.SelectAll(Sender: TObject);
+var i: Integer;
+begin
+  for i := 0 to LV.Items.Count-1 do
+    LV.Items[i].Checked := True;
+end;
+
+procedure TFavoritesWin.ClearAll(Sender: TObject);
+var i: Integer;
+begin
+  for i := 0 to LV.Items.Count-1 do
+    LV.Items[i].Checked := False;
+end;
+
+procedure TFavoritesWin.SaveFavorites(Sender: TObject);
+var
+  i: Integer;
+  M: PMail;
+  K: TFavKey;
+  Dir, DotPath, PngPath: string;
+begin
+  if CurrentUser = nil then Exit;
+
+  Dir := IncludeTrailingPathDelimiter(GetCurrentDir) + 'Reportes';
+  if not DirectoryExists(Dir) then CreateDir(Dir);
+  DotPath := Dir + PathDelim + 'favoritos.dot';
+  PngPath := Dir + PathDelim + 'favoritos.png';
+
+  if Favorites = nil then
+    Favorites := TBFavorites.Create(3); // grado 3
+
+  Favorites.Clear;
+
+  for i := 0 to LV.Items.Count-1 do
+    if LV.Items[i].Checked then
+    begin
+      M := PMail(LV.Items[i].Data);
+      if M <> nil then
+      begin
+        K.ID     := M^.Id;
+        K.Asunto := M^.Asunto;
+        Favorites.Insert(K);
+      end;
+    end;
+
+  Favorites.SaveDOT(DotPath);
+  if RenderizarPNGConDot(DotPath, PngPath) then
+  begin
+    if not OpenDocument(PngPath) then
+      ShowMessage('Imagen generada: ' + PngPath);
+  end
+  else
+    ShowMessage('DOT exportado: ' + DotPath + LineEnding +
+                'Si deseas PNG instala Graphviz: sudo apt install graphviz -y');
+end;
+
+procedure TFavoritesWin.OpenPNG(Sender: TObject);
+var
+  Dir, PngPath: string;
+begin
+  Dir := IncludeTrailingPathDelimiter(GetCurrentDir) + 'Reportes';
+  PngPath := Dir + PathDelim + 'favoritos.png';
+  if FileExists(PngPath) then
+    if not OpenDocument(PngPath) then
+      ShowMessage('Imagen: ' + PngPath)
+  else
+    ShowMessage('Aún no hay PNG. Presiona "Guardar en Árbol B y Graficar" primero.');
+end;
+
+{--- BORRADORES (AVL) ---}
+
+constructor TDraftsWin.CreateSimple(AOwner: TComponent);
+begin
+  inherited CreateNew(AOwner, 1);
+  Caption := 'Borradores (AVL)'; Position := poScreenCenter; Width := 960; Height := 700;
+
+  pnlTop := TPanel.Create(Self); pnlTop.Parent := Self; pnlTop.Align := alTop; pnlTop.Height := 200;
+
+  lblID := TLabel.Create(Self); lblID.Parent := pnlTop; lblID.Caption := 'ID:'; lblID.Left := 12; lblID.Top := 12;
+  edtID := TEdit.Create(Self); edtID.Parent := pnlTop; edtID.Left := 60; edtID.Top := 8; edtID.Width := 80;
+
+  lblRem := TLabel.Create(Self); lblRem.Parent := pnlTop; lblRem.Caption := 'Remitente:'; lblRem.Left := 160; lblRem.Top := 12;
+  edtRem := TEdit.Create(Self); edtRem.Parent := pnlTop; edtRem.Left := 240; edtRem.Top := 8; edtRem.Width := 300;
+
+  lblDest := TLabel.Create(Self); lblDest.Parent := pnlTop; lblDest.Caption := 'Destinatario:'; lblDest.Left := 560; lblDest.Top := 12;
+  edtDest := TEdit.Create(Self); edtDest.Parent := pnlTop; edtDest.Left := 650; edtDest.Top := 8; edtDest.Width := 280;
+
+  lblAsu := TLabel.Create(Self); lblAsu.Parent := pnlTop; lblAsu.Caption := 'Asunto:'; lblAsu.Left := 12; lblAsu.Top := 44;
+  edtAsu := TEdit.Create(Self); edtAsu.Parent := pnlTop; edtAsu.Left := 70; edtAsu.Top := 40; edtAsu.Width := 860;
+
+  lblEst := TLabel.Create(Self); lblEst.Parent := pnlTop; lblEst.Caption := 'Estado:'; lblEst.Left := 12; lblEst.Top := 72;
+  edtEst := TEdit.Create(Self);  edtEst.Parent := pnlTop;  edtEst.Left := 70; edtEst.Top := 68; edtEst.Width := 180;
+
+  lblFec := TLabel.Create(Self); lblFec.Parent := pnlTop; lblFec.Caption := 'Fecha (YYYY-MM-DD o DD/MM/AAAA):'; lblFec.Left := 270; lblFec.Top := 72;
+  edtFec := TEdit.Create(Self);  edtFec.Parent := pnlTop;  edtFec.Left := 560; edtFec.Top := 68; edtFec.Width := 200;
+
+  memoMsg := TMemo.Create(Self); memoMsg.Parent := pnlTop; memoMsg.Left := 12; memoMsg.Top := 100;
+  memoMsg.Width := 918; memoMsg.Height := 92;
+
+  lblRec := TLabel.Create(Self);
+  lblRec.Parent := pnlTop; lblRec.Caption := 'Recorrido:'; lblRec.Left := 12; lblRec.Top := 196;
+
+  cmbRec := TComboBox.Create(Self);
+  cmbRec.Parent := pnlTop; cmbRec.Style := csDropDownList;
+  cmbRec.Items.Add('Pre-Orden'); cmbRec.Items.Add('In-Orden'); cmbRec.Items.Add('Post-Orden');
+  cmbRec.ItemIndex := 1;
+  cmbRec.Left := 90; cmbRec.Top := 192; cmbRec.Width := 120;
+  cmbRec.OnChange := @LoadList;
+
+  LV := TListView.Create(Self); LV.Parent := Self; LV.Align := alClient;
+  LV.ViewStyle := vsReport; LV.ReadOnly := True; LV.RowSelect := True; LV.GridLines := True;
+  with LV.Columns.Add do begin Caption := 'ID'; Width := 60; end;
+  with LV.Columns.Add do begin Caption := 'Remitente'; Width := 220; end;
+  with LV.Columns.Add do begin Caption := 'Destinatario'; Width := 220; end;
+  with LV.Columns.Add do begin Caption := 'Asunto'; Width := 360; end;
+  LV.OnSelectItem := @OnSelect;
+
+  pnlBottom := TPanel.Create(Self); pnlBottom.Parent := Self; pnlBottom.Align := alBottom; pnlBottom.Height := 48;
+
+  btnNuevo := TButton.Create(Self); btnNuevo.Parent := pnlBottom; btnNuevo.Caption := 'Nuevo'; btnNuevo.Left := 8; btnNuevo.Top := 8; btnNuevo.Width := 80; btnNuevo.OnClick := @Nuevo;
+  btnGuardar := TButton.Create(Self); btnGuardar.Parent := pnlBottom; btnGuardar.Caption := 'Guardar (Ins/Upd)'; btnGuardar.Left := 96; btnGuardar.Top := 8; btnGuardar.Width := 140; btnGuardar.OnClick := @Guardar;
+  btnEliminar := TButton.Create(Self); btnEliminar.Parent := pnlBottom; btnEliminar.Caption := 'Eliminar'; btnEliminar.Left := 244; btnEliminar.Top := 8; btnEliminar.Width := 100; btnEliminar.OnClick := @Eliminar;
+  btnEnviar := TButton.Create(Self); btnEnviar.Parent := pnlBottom; btnEnviar.Caption := 'Enviar'; btnEnviar.Left := 348; btnEnviar.Top := 8; btnEnviar.Width := 100; btnEnviar.OnClick := @Enviar;
+  btnExportDOT := TButton.Create(Self); btnExportDOT.Parent := pnlBottom; btnExportDOT.Caption := 'Exportar DOT/PNG'; btnExportDOT.Left := 452; btnExportDOT.Top := 8; btnExportDOT.Width := 140; btnExportDOT.OnClick := @ExportDOT;
+  btnVerPNG := TButton.Create(Self); btnVerPNG.Parent := pnlBottom; btnVerPNG.Caption := 'Abrir PNG'; btnVerPNG.Left := 596; btnVerPNG.Top := 8; btnVerPNG.Width := 100; btnVerPNG.OnClick := @VerPNG;
+  btnCerrar := TButton.Create(Self); btnCerrar.Parent := pnlBottom; btnCerrar.Caption := 'Cerrar'; btnCerrar.Left := 804; btnCerrar.Top := 8; btnCerrar.Width := 80; btnCerrar.ModalResult := mrClose;
+
+  LoadList(nil);
+end;
+
+procedure TDraftsWin.LoadList(Sender: TObject);
+var
+  L: TStringList;
+  i: Integer;
+  parts: TStringArray;
+  it: TListItem;
+begin
+  LV.Items.BeginUpdate;
+  try
+    LV.Items.Clear;
+    if Drafts = nil then Exit;
+
+    L := TStringList.Create;
+    try
+      case cmbRec.ItemIndex of
+        0: Drafts.ToStringsPreOrder(L);
+        1: Drafts.ToStringsInOrder(L);
+        2: Drafts.ToStringsPostOrder(L);
+      else
+        Drafts.ToStringsInOrder(L);
+      end;
+
+      for i := 0 to L.Count-1 do
+      begin
+        parts := L[i].Split([';']);
+        if Length(parts) >= 4 then
+        begin
+          it := LV.Items.Add;
+          it.Caption := parts[0];
+          it.SubItems.Add(parts[1]);
+          it.SubItems.Add(parts[2]);
+          it.SubItems.Add(parts[3]);
+        end;
+      end;
+    finally
+      L.Free;
+    end;
+  finally
+    LV.Items.EndUpdate;
+  end;
+end;
+
+function TDraftsWin.ReadDraftFromForm(out D: TDraft): Boolean;
+
+  function TryParseDateLoose(const S: string; out DT: TDateTime): Boolean;
+  var fs: TFormatSettings; tmp: TDateTime;
+  begin
+    Result := False;
+    if Trim(S) = '' then Exit;
+    if TryStrToDate(S, DT) then Exit(True);
+    fs := DefaultFormatSettings; fs.DateSeparator := '-'; fs.ShortDateFormat := 'yyyy-mm-dd';
+    if TryStrToDate(S, tmp, fs) then begin DT := tmp; Exit(True); end;
+  end;
+
+begin
+  Result := False;
+  if not TryStrToInt(Trim(edtID.Text), D.ID) then begin ShowMessage('ID inválido.'); Exit; end;
+  D.Remitente := Trim(edtRem.Text);
+  D.Destinatario := Trim(edtDest.Text);
+  D.Asunto := edtAsu.Text;
+  D.Mensaje := memoMsg.Text;
+  D.Estado := Trim(edtEst.Text);
+  if not TryParseDateLoose(edtFec.Text, D.Fecha) then D.Fecha := 0;
+
+  if D.Remitente = '' then begin ShowMessage('Remitente requerido.'); Exit; end;
+  if D.Destinatario = '' then begin ShowMessage('Destinatario requerido.'); Exit; end;
+  Result := True;
+end;
+
+procedure TDraftsWin.Nuevo(Sender: TObject);
+begin
+  edtID.Clear; edtRem.Clear; edtDest.Clear; edtAsu.Clear; memoMsg.Clear; edtEst.Clear; edtFec.Clear;
+  if (CurrentUser <> nil) and (edtRem.Text = '') then
+    edtRem.Text := CurrentUser^.Email;
+end;
+
+procedure TDraftsWin.Guardar(Sender: TObject);
+var D: TDraft;
+begin
+  if Drafts = nil then Exit;
+  if not ReadDraftFromForm(D) then Exit;
+
+  if not Drafts.Insert(D) then
+  begin
+    if Drafts.Update(D) then
+      ShowMessage('Borrador actualizado.')
+    else
+    begin
+      ShowMessage('No se pudo insertar/actualizar.');
+      Exit;
+    end;
+  end
+  else
+    ShowMessage('Borrador guardado.');
+
+  LoadList(nil);
+end;
+
+procedure TDraftsWin.Eliminar(Sender: TObject);
+var id: Integer;
+begin
+  if Drafts = nil then Exit;
+  if LV.Selected = nil then begin ShowMessage('Selecciona un borrador.'); Exit; end;
+  if not TryStrToInt(LV.Selected.Caption, id) then Exit;
+  if Drafts.Delete(id) then begin ShowMessage('Borrador eliminado.'); LoadList(nil); end
+  else ShowMessage('No se pudo eliminar.');
+end;
+
+procedure TDraftsWin.Enviar(Sender: TObject);
+var
+  id: Integer;
+  D: TDraft;
+  Dest: PUsuario;
+begin
+  if (CurrentUser = nil) then begin ShowMessage('Inicie sesión.'); Exit; end;
+  if Drafts = nil then Exit;
+  if LV.Selected = nil then begin ShowMessage('Selecciona un borrador.'); Exit; end;
+  if not TryStrToInt(LV.Selected.Caption, id) then Exit;
+
+  if not Drafts.Search(id, D) then begin ShowMessage('No se encontró el borrador.'); Exit; end;
+
+  Dest := BuscarUsuarioPorEmail(D.Destinatario);
+  if Dest = nil then begin ShowMessage('El destinatario no existe.'); Exit; end;
+
+  Form3.AppendInbox(Dest, D.Remitente, D.Asunto, D.Mensaje, Now, False, 'nuevo');
+  Form3.IncRel(D.Remitente, D.Destinatario);
+  Drafts.Delete(D.ID);
+
+  ShowMessage('Correo enviado desde borrador.');
+  LoadList(nil);
+end;
+
+procedure TDraftsWin.ExportDOT(Sender: TObject);
+var dir, dotPath, pngPath: string;
+begin
+  if Drafts = nil then Exit;
+  dir := ReportDir;
+  dotPath := dir + PathDelim + 'borradores.dot';
+  pngPath := dir + PathDelim + 'borradores.png';
+  Drafts.SaveDOT(dotPath);
+  if Drafts.RenderPNGFromDOT(dotPath, pngPath) then
+    ShowMessage('DOT y PNG generados en: ' + dir)
+  else
+    ShowMessage('DOT exportado en: ' + dotPath + LineEnding +
+                'Para PNG instala Graphviz (dot).');
+end;
+
+procedure TDraftsWin.VerPNG(Sender: TObject);
+var dir, pngPath: string;
+begin
+  dir := ReportDir;
+  pngPath := dir + PathDelim + 'borradores.png';
+  if FileExists(pngPath) then
+  begin
+    if not OpenDocument(pngPath) then
+      ShowMessage('Imagen: ' + pngPath);
+  end
+  else
+    ShowMessage('No hay PNG. Usa "Exportar DOT/PNG".');
+end;
+
+procedure TDraftsWin.OnSelect(Sender: TObject; Item: TListItem; Selected: Boolean);
+var id: Integer; D: TDraft;
+begin
+  if (Item <> nil) and Selected then
+  begin
+    if TryStrToInt(Item.Caption, id) and (Drafts <> nil) then
+      if Drafts.Search(id, D) then
+      begin
+        edtID.Text := IntToStr(D.ID);
+        edtRem.Text := D.Remitente;
+        edtDest.Text := D.Destinatario;
+        edtAsu.Text := D.Asunto;
+        memoMsg.Text := D.Mensaje;
+        edtEst.Text := D.Estado;
+        if D.Fecha > 0 then edtFec.Text := DateToStr(D.Fecha) else edtFec.Clear;
+      end;
+  end;
+end;
+
+function TDraftsWin.ReportDir: string;
+begin
+  Result := IncludeTrailingPathDelimiter(GetCurrentDir) + 'Reportes';
+  if not DirectoryExists(Result) then CreateDir(Result);
+end;
+
 {--- Handlers de Form3 ---}
 
 procedure TForm3.AfterConstruction;
 begin
   inherited AfterConstruction;
-  Button1.Caption := 'Bandeja de Entrada';
-  Button2.Caption := 'Enviar Correo';
-  Button3.Caption := 'Papelera';
-  Button4.Caption := 'Contactos';
-  Button5.Caption := 'Programar Correo';
-  Button6.Caption := 'Correos Programados';
-  Button7.Caption := 'Actualizar Perfil';
-  Button8.Caption := 'Generar Reportes';
-  Button9.Caption := 'Cerrar Sesión';
+  Button1.Caption  := 'Bandeja de Entrada';
+  Button2.Caption  := 'Enviar Correo';
+  Button3.Caption  := 'Papelera';
+  Button4.Caption  := 'Contactos';
+  Button5.Caption  := 'Programar Correo';
+  Button6.Caption  := 'Correos Programados';
+  Button7.Caption  := 'Actualizar Perfil';
+  Button8.Caption  := 'Generar Reportes';
+  Button9.Caption  := 'Cerrar Sesión';
+  Button10.Caption := 'Borradores (AVL)';
+  Button11.Caption := 'Favoritos (Árbol B)';
 
-  Button1.OnClick := @Button1Click;
-  Button2.OnClick := @Button2Click;
-  Button3.OnClick := @Button3Click;
-  Button4.OnClick := @Button4Click;
-  Button5.OnClick := @Button5Click;
-  Button6.OnClick := @Button6Click;
-  Button7.OnClick := @Button7Click;
-  Button8.OnClick := @Button8Click;
-  Button9.OnClick := @Button9Click;
-  // Button10 se asigna en el diseñador o aquí si quieres:
+  Button1.OnClick  := @Button1Click;
+  Button2.OnClick  := @Button2Click;
+  Button3.OnClick  := @Button3Click;
+  Button4.OnClick  := @Button4Click;
+  Button5.OnClick  := @Button5Click;
+  Button6.OnClick  := @Button6Click;
+  Button7.OnClick  := @Button7Click;
+  Button8.OnClick  := @Button8Click;
+  Button9.OnClick  := @Button9Click;
   if Assigned(Button10) then Button10.OnClick := @Button10Click;
+  if Assigned(Button11) then Button11.OnClick := @Button11Click;
 end;
 
 procedure TForm3.Button1Click(Sender: TObject);
@@ -1611,61 +2035,29 @@ begin
 end;
 
 procedure TForm3.Button10Click(Sender: TObject);
-
+var W: TDraftsWin;
 begin
-
+  if CurrentUser = nil then begin SafeMsg('Inicie sesión.'); Exit; end;
+  if Drafts = nil then Drafts := TDraftAVL.Create;
+  W := TDraftsWin.CreateSimple(Self);
+  try
+    W.ShowModal;
+  finally
+    W.Free;
+  end;
 end;
 
 procedure TForm3.Button11Click(Sender: TObject);
-var
-  K: TFavKey;
-  M: PMail;
-  Dir, DotPath, PngPath: string;
+var W: TFavoritesWin;
 begin
-  if CurrentUser = nil then
-  begin
-    SafeMsg('Inicie sesión.');
-    Exit;
+  if CurrentUser = nil then begin SafeMsg('Inicie sesión.'); Exit; end;
+  W := TFavoritesWin.CreateForUser(Self, CurrentUser);
+  try
+    W.ShowModal;
+  finally
+    W.Free;
   end;
-
-  // Crea el árbol B si aún no existe (grado 3 recomendado)
-  if Favorites = nil then
-    Favorites := TBFavorites.Create(3);
-
-  // (Opcional) Limpiar el árbol antes de recargarlo
-  Favorites.Clear;
-
-  // Cargamos como "favoritos" los correos de la bandeja (ejemplo: todos)
-  M := CurrentUser^.InboxHead;
-  while M <> nil do
-  begin
-    K.ID     := M^.Id;
-    K.Asunto := M^.Asunto;
-    Favorites.Insert(K);
-    M := M^.Next;
-  end;
-
-  // Exportar y renderizar Graphviz
-  Dir := IncludeTrailingPathDelimiter(GetCurrentDir) + 'Reportes';
-  if not DirectoryExists(Dir) then CreateDir(Dir);
-
-  DotPath := Dir + PathDelim + 'favoritos.dot';
-  PngPath := Dir + PathDelim + 'favoritos.png';
-
-  Favorites.SaveDOT(DotPath);
-
-  if RenderizarPNGConDot(DotPath, PngPath) then
-  begin
-    if not OpenDocument(PngPath) then
-      ShowMessage('Imagen generada: ' + PngPath);
-  end
-  else
-    ShowMessage('DOT exportado: ' + DotPath + LineEnding +
-                'Para PNG instala Graphviz: sudo apt install graphviz -y');
 end;
-
-
-
 
 procedure TForm3.Button2Click(Sender: TObject);
 var F: TSendWin;
