@@ -15,6 +15,7 @@ type
     Button10: TButton; // Borradores (AVL)
     Button11: TButton; // Favoritos (Árbol B)
     Button12: TButton;
+    Button13: TButton; // Eliminar Contactos (lote)
     Button2: TButton;  // Enviar Correo
     Button3: TButton;  // Papelera
     Button4: TButton;  // Contactos
@@ -26,6 +27,7 @@ type
     Label1: TLabel;
     procedure Button10Click(Sender: TObject);
     procedure Button11Click(Sender: TObject);
+    procedure Button13Click(Sender: TObject);
     procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
     procedure Button3Click(Sender: TObject);
@@ -307,6 +309,22 @@ type
     procedure ClearAll(Sender: TObject);
     procedure SaveFavorites(Sender: TObject);
     procedure OpenPNG(Sender: TObject);
+  public
+    constructor CreateForUser(AOwner: TComponent; AUser: PUsuario);
+  end;
+
+  // === NUEVA SUBVENTANA: Eliminación MASIVA de contactos ===
+  TContactsBulkDelWin = class(TForm)
+  private
+    U: PUsuario;
+    LV: TListView;
+    pnlBtns: TPanel;
+    btnSelAll, btnClear, btnDelete, btnCerrar: TButton;
+    procedure LoadList;
+    procedure SelectAll(Sender: TObject);
+    procedure ClearAll(Sender: TObject);
+    procedure DeleteChecked(Sender: TObject);
+    function DeleteByEmail(const CEmail: string): Boolean; // <- usa Self.U (sin parámetro U)
   public
     constructor CreateForUser(AOwner: TComponent; AUser: PUsuario);
   end;
@@ -1996,6 +2014,126 @@ begin
   if not DirectoryExists(Result) then CreateDir(Result);
 end;
 
+{--- Eliminar Contactos en Lote ---}
+
+constructor TContactsBulkDelWin.CreateForUser(AOwner: TComponent; AUser: PUsuario);
+begin
+  inherited CreateNew(AOwner, 1);
+  U := AUser;
+  Caption := 'Eliminar contactos';
+  Position := poScreenCenter; Width := 760; Height := 520;
+
+  LV := TListView.Create(Self);
+  LV.Parent := Self; LV.Align := alClient;
+  LV.ViewStyle := vsReport; LV.ReadOnly := True; LV.RowSelect := True; LV.GridLines := True;
+  LV.CheckBoxes := True;
+  with LV.Columns.Add do begin Caption := 'Nombre'; Width := 260; end;
+  with LV.Columns.Add do begin Caption := 'Email'; Width := 360; end;
+
+  pnlBtns := TPanel.Create(Self); pnlBtns.Parent := Self; pnlBtns.Align := alBottom; pnlBtns.Height := 48;
+
+  btnSelAll := TButton.Create(Self); btnSelAll.Parent := pnlBtns; btnSelAll.Caption := 'Seleccionar todo'; btnSelAll.Left := 8; btnSelAll.Top := 8; btnSelAll.Width := 130; btnSelAll.OnClick := @SelectAll;
+  btnClear  := TButton.Create(Self); btnClear.Parent := pnlBtns; btnClear.Caption := 'Limpiar selección'; btnClear.Left := 144; btnClear.Top := 8; btnClear.Width := 130; btnClear.OnClick := @ClearAll;
+  btnDelete := TButton.Create(Self); btnDelete.Parent := pnlBtns; btnDelete.Caption := 'Eliminar seleccionados'; btnDelete.Left := 280; btnDelete.Top := 8; btnDelete.Width := 170; btnDelete.OnClick := @DeleteChecked;
+  btnCerrar := TButton.Create(Self); btnCerrar.Parent := pnlBtns; btnCerrar.Caption := 'Cerrar'; btnCerrar.Left := 640; btnCerrar.Top := 8; btnCerrar.Width := 96; btnCerrar.ModalResult := mrClose;
+
+  LoadList;
+end;
+
+procedure TContactsBulkDelWin.LoadList;
+var
+  T, H, C: PContacto;
+  it: TListItem;
+begin
+  LV.Items.BeginUpdate;
+  try
+    LV.Items.Clear;
+    if (U = nil) or (U^.ContactTail = nil) then Exit;
+
+    T := U^.ContactTail;
+    H := T^.Next;
+    C := H;
+    repeat
+      it := LV.Items.Add;
+      it.Caption := C^.Nombre;
+      it.SubItems.Add(C^.Email);
+      it.Checked := False;
+      C := C^.Next;
+    until C = H;
+  finally
+    LV.Items.EndUpdate;
+  end;
+end;
+
+procedure TContactsBulkDelWin.SelectAll(Sender: TObject);
+var i: Integer;
+begin
+  for i := 0 to LV.Items.Count-1 do LV.Items[i].Checked := True;
+end;
+
+procedure TContactsBulkDelWin.ClearAll(Sender: TObject);
+var i: Integer;
+begin
+  for i := 0 to LV.Items.Count-1 do LV.Items[i].Checked := False;
+end;
+
+function TContactsBulkDelWin.DeleteByEmail(const CEmail: string): Boolean;
+var
+  T, H, C, Prev: PContacto;
+  function EqualCI(const A,B:string):Boolean; inline; begin Result := LowerCase(A)=LowerCase(B); end;
+begin
+  Result := False;
+  if (Self.U = nil) or (Self.U^.ContactTail = nil) then Exit;
+
+  T := Self.U^.ContactTail; H := T^.Next; Prev := T; C := H;
+  repeat
+    if EqualCI(C^.Email, CEmail) then
+    begin
+      if C = C^.Next then
+        Self.U^.ContactTail := nil
+      else
+      begin
+        Prev^.Next := C^.Next;
+        if Self.U^.ContactTail = C then Self.U^.ContactTail := Prev;
+      end;
+      Dispose(C);
+      Exit(True);
+    end;
+    Prev := C; C := C^.Next;
+  until C = H;
+end;
+
+procedure TContactsBulkDelWin.DeleteChecked(Sender: TObject);
+var
+  i, countSel, removed: Integer;
+  emails: TStringList;
+begin
+  if (U = nil) then Exit;
+
+  emails := TStringList.Create;
+  try
+    for i := 0 to LV.Items.Count-1 do
+      if LV.Items[i].Checked and (LV.Items[i].SubItems.Count > 0) then
+        emails.Add(LV.Items[i].SubItems[0]);
+
+    countSel := emails.Count;
+    if countSel = 0 then begin ShowMessage('Selecciona al menos un contacto.'); Exit; end;
+
+    if MessageDlg('Confirmar',
+                  Format('¿Eliminar %d contacto(s) seleccionados?', [countSel]),
+                  mtConfirmation, [mbYes, mbNo], 0) <> mrYes then Exit;
+
+    removed := 0;
+    for i := 0 to emails.Count-1 do
+      if DeleteByEmail(emails[i]) then Inc(removed);
+
+    ShowMessage(Format('Eliminados: %d', [removed]));
+    LoadList;
+  finally
+    emails.Free;
+  end;
+end;
+
 {--- Handlers de Form3 ---}
 
 procedure TForm3.AfterConstruction;
@@ -2012,6 +2150,7 @@ begin
   Button9.Caption  := 'Cerrar Sesión';
   Button10.Caption := 'Borradores (AVL)';
   Button11.Caption := 'Favoritos (Árbol B)';
+  Button13.Caption := 'Eliminar Contactos';
 
   Button1.OnClick  := @Button1Click;
   Button2.OnClick  := @Button2Click;
@@ -2024,6 +2163,7 @@ begin
   Button9.OnClick  := @Button9Click;
   if Assigned(Button10) then Button10.OnClick := @Button10Click;
   if Assigned(Button11) then Button11.OnClick := @Button11Click;
+  if Assigned(Button13) then Button13.OnClick := @Button13Click;
 end;
 
 procedure TForm3.Button1Click(Sender: TObject);
@@ -2052,6 +2192,19 @@ var W: TFavoritesWin;
 begin
   if CurrentUser = nil then begin SafeMsg('Inicie sesión.'); Exit; end;
   W := TFavoritesWin.CreateForUser(Self, CurrentUser);
+  try
+    W.ShowModal;
+  finally
+    W.Free;
+  end;
+end;
+
+procedure TForm3.Button13Click(Sender: TObject);
+var W: TContactsBulkDelWin;
+begin
+  if CurrentUser = nil then begin SafeMsg('Inicie sesión.'); Exit; end;
+  if (CurrentUser^.ContactTail = nil) then begin SafeMsg('No hay contactos.'); Exit; end;
+  W := TContactsBulkDelWin.CreateForUser(Self, CurrentUser);
   try
     W.ShowModal;
   finally

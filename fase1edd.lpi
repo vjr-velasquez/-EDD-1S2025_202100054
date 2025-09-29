@@ -83,6 +83,11 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="uAVL"/>
       </Unit>
+      <Unit>
+        <Filename Value="ubstcontacts.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="uBSTContacts"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

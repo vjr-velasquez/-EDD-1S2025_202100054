@@ -6,6 +6,7 @@ object Form3: TForm3
   Caption = 'Form3'
   ClientHeight = 295
   ClientWidth = 680
+  LCLVersion = '4.2.0.0'
   object Button1: TButton
     Left = 160
     Height = 25
@@ -101,18 +102,18 @@ object Form3: TForm3
     ParentFont = False
   end
   object Button10: TButton
-    Left = 464
+    Left = 472
     Height = 25
-    Top = 96
+    Top = 40
     Width = 128
     Caption = 'Borradores'
     TabOrder = 9
     OnClick = Button10Click
   end
   object Button11: TButton
-    Left = 472
+    Left = 480
     Height = 25
-    Top = 144
+    Top = 96
     Width = 112
     Caption = 'Favoritos'
     TabOrder = 10
@@ -125,5 +126,13 @@ object Form3: TForm3
     Width = 216
     Caption = 'Publicar_mensaje_Comunidad'
     TabOrder = 11
+  end
+  object Button13: TButton
+    Left = 472
+    Height = 40
+    Top = 144
+    Width = 152
+    Caption = 'EliminarContacts'
+    TabOrder = 12
   end
 end
