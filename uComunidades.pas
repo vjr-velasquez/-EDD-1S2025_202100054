@@ -5,309 +5,405 @@ unit uComunidades;
 interface
 
 uses
-  Classes, SysUtils, Process, uUsuariosAPI;
+  Classes, SysUtils, DateUtils, Process;
 
 type
-  PMember = ^TMember;
-  TMember = record
-    Email: String;
-    Next : PMember;
+  // ===== lista simple de miembros (emails) =====
+  PMemberNode = ^TMemberNode;
+  TMemberNode = record
+    email: string;
+    next : PMemberNode;
   end;
 
-  PComunidad = ^TComunidad;
-  TComunidad = record
-    Id      : Integer;
-    Nombre  : String;
-    Miembros: PMember;   // lista simple de miembros (por email)
-    Next    : PComunidad;
+  // ===== lista simple de mensajes =====
+  PMsgNode = ^TMsgNode;
+  TMsgNode = record
+    emailAutor: string;
+    texto     : string;
+    fecha     : TDateTime;
+    next      : PMsgNode;
+  end;
+
+  // ===== nodo del BST (comunidad) =====
+  PComNode = ^TComNode;
+  TComNode = record
+    nombre        : string;     // clave (se guarda en minúsculas/trim)
+    fechaCreacion : TDateTime;
+    msgCount      : Integer;    // número de mensajes publicados
+    miembros      : PMemberNode;
+    mensajes      : PMsgNode;
+    left, right   : PComNode;
   end;
 
 var
-  ComunidadesHead: PComunidad = nil;
-  NextComunidadId: Integer = 1;
+  ComRoot: PComNode = nil;      // raíz del BST
 
-procedure Comunidades_Init;
-function  Comunidades_Crear(const Nombre: String): Boolean; // False si ya existe o vacío
-function  Comunidades_Eliminar(const Nombre: String): Boolean;
-function  Comunidades_AgregarMiembro(const NombreComunidad, Email: String): Boolean; // False si no existe comunidad/usuario o duplicado
-function  Comunidades_EliminarMiembro(const NombreComunidad, Email: String): Boolean;
-procedure Comunidades_Listar(out S: String);
+// -------- API que ya usabas --------
+function Comunidades_Crear(const Nombre: string): Boolean;
+function Comunidades_AgregarMiembro(const Nombre, Email: string): Boolean;
 
-// Reporte: genera DOT y PNG en carpeta (por defecto "Root-Reportes")
-procedure Comunidades_ReportePNG(const CarpetaSalida: String = 'Root-Reportes');
-function  Comunidades_GenerarDOT(const DotPath: String): Boolean; // por si alguien quiere sólo el DOT
+// -------- API nueva para publicar y ver mensajes --------
+function Comunidades_PublicarMensaje(const Nombre, EmailAutor, Mensaje: string): Boolean;
 
-// Utilidad (opcional) para saber cuántos miembros tiene una comunidad
-function  Comunidades_ContarMiembros(const NombreComunidad: String): Integer;
+// Mensajes de UNA comunidad en Dest (uno por línea)
+function Comunidades_VerMensajes(const Nombre: string; Dest: TStrings): Boolean;
+// Mensajes de TODAS las comunidades (in-order) en Dest
+procedure Comunidades_VerMensajesTodas(Dest: TStrings);
+
+// Utilitario opcional
+function Comunidades_Existe(const Nombre: string): Boolean;
+
+// --------- Reporte (Graphviz) ---------
+// 1) Emite el DOT del BST en AOut (contenido completo: digraph {...})
+procedure EmitirDOT_ComunidadesBST(AOut: TStrings);
+// 2) Genera archivos .dot y .png en OutDir. Devuelve la ruta del PNG.
+function GenerarReporteComunidades(const OutDir: string): string;
 
 implementation
 
-function EqualCI(const A,B: String): Boolean; inline;
+uses uUsuariosAPI;
+
+{========================== Helpers ==========================}
+
+function NormName(const S: string): string; inline;
 begin
-  Result := SameText(Trim(A), Trim(B));
+  Result := Trim(LowerCase(S));
 end;
 
-function _Esc(const S: string): string; inline;
+function CmpName(const A, B: string): Integer; inline;
 begin
-  Result := StringReplace(S, '"', '\"', [rfReplaceAll]);
+  Result := CompareText(NormName(A), NormName(B));
 end;
 
-function _IdSafe(const S: string): string; inline;
-var i: Integer;
+function NewComNode(const Nombre: string): PComNode;
 begin
-  Result := '';
+  New(Result);
+  Result^.nombre        := NormName(Nombre);
+  Result^.fechaCreacion := Now;
+  Result^.msgCount      := 0;
+  Result^.miembros      := nil;
+  Result^.mensajes      := nil;
+  Result^.left          := nil;
+  Result^.right         := nil;
+end;
+
+function FindComunidad(const Nombre: string): PComNode;
+var cur: PComNode; key: string; c: Integer;
+begin
+  Result := nil; cur := ComRoot; key := NormName(Nombre);
+  while cur <> nil do
+  begin
+    c := CompareText(cur^.nombre, key);
+    if c = 0 then exit(cur)
+    else if c > 0 then cur := cur^.left
+    else cur := cur^.right;
+  end;
+end;
+
+procedure BSTInsert(var Root: PComNode; Node: PComNode);
+var cur, parent: PComNode; c: Integer;
+begin
+  if Root = nil then begin Root := Node; exit; end;
+  cur := Root; parent := nil;
+  while cur <> nil do
+  begin
+    parent := cur;
+    c := CompareText(Node^.nombre, cur^.nombre);
+    if c = 0 then exit;               // ya existe (no insertamos)
+    if c < 0 then cur := cur^.left
+             else cur := cur^.right;
+  end;
+  if CompareText(Node^.nombre, parent^.nombre) < 0 then
+    parent^.left  := Node
+  else
+    parent^.right := Node;
+end;
+
+function MemberExists(L: PMemberNode; const Email: string): Boolean;
+var e: string;
+begin
+  e := NormName(Email);
+  while L <> nil do
+  begin
+    if SameText(L^.email, e) then exit(True);
+    L := L^.next;
+  end;
+  Result := False;
+end;
+
+procedure MemberAdd(var L: PMemberNode; const Email: string);
+var p: PMemberNode;
+begin
+  New(p);
+  p^.email := NormName(Email);
+  p^.next  := L;
+  L := p;
+end;
+
+procedure MsgAdd(var L: PMsgNode; const Email, Texto: string; const F: TDateTime);
+var
+  p, tail: PMsgNode;
+begin
+  New(p);
+  p^.emailAutor := NormName(Email);
+  p^.texto      := Texto;
+  p^.fecha      := F;
+  p^.next       := nil;
+
+  // insertar al final para orden cronológico
+  if L = nil then
+    L := p
+  else
+  begin
+    tail := L;
+    while tail^.next <> nil do
+      tail := tail^.next;
+    tail^.next := p;
+  end;
+end;
+
+// --------- pequeños sanitizadores (NO EscapeDOT) ----------
+
+// Id de nodo seguro para DOT (solo letras, números, guiones bajos)
+function IdSafe(const S: string): string;
+var i: Integer; c: Char;
+begin
+  Result := 'com_';
   for i := 1 to Length(S) do
-    if S[i] in ['A'..'Z','a'..'z','0'..'9','_'] then
-      Result += S[i]
+  begin
+    c := S[i];
+    if (c in ['A'..'Z','a'..'z','0'..'9']) then
+      Result += c
     else
       Result += '_';
-end;
-
-function _BuscarComunidad(const Nombre: String): PComunidad;
-var C: PComunidad;
-begin
-  Result := nil;
-  C := ComunidadesHead;
-  while C <> nil do
-  begin
-    if EqualCI(C^.Nombre, Nombre) then Exit(C);
-    C := C^.Next;
   end;
 end;
 
-function _MiembroExiste(C: PComunidad; const Email: String): Boolean;
-var M: PMember;
+// Para labels: cambiamos comillas dobles por simples y CR/LF a \n
+function LabelSafe(const S: string): string;
+var R: string;
 begin
-  Result := False;
-  if (C = nil) then Exit;
-  M := C^.Miembros;
-  while M <> nil do
-  begin
-    if EqualCI(M^.Email, Email) then Exit(True);
-    M := M^.Next;
-  end;
+  R := StringReplace(S, '"', '''', [rfReplaceAll]);
+  R := StringReplace(R, #13#10, '\n', [rfReplaceAll]);
+  R := StringReplace(R, #10, '\n',   [rfReplaceAll]);
+  R := StringReplace(R, #13, '\n',   [rfReplaceAll]);
+  Result := R;
 end;
 
-procedure Comunidades_Init;
-begin
-  ComunidadesHead := nil;
-  NextComunidadId := 1;
-end;
+{========================== API ==========================}
 
-function Comunidades_Crear(const Nombre: String): Boolean;
-var N: PComunidad;
+function Comunidades_Crear(const Nombre: string): Boolean;
+var n: string; node: PComNode;
 begin
   Result := False;
-  if Trim(Nombre) = '' then Exit;
-  if _BuscarComunidad(Nombre) <> nil then Exit; // ya existe
-
-  New(N);
-  N^.Id       := NextComunidadId; Inc(NextComunidadId);
-  N^.Nombre   := Trim(Nombre);
-  N^.Miembros := nil;
-  N^.Next     := ComunidadesHead; // insertamos al inicio (rápido)
-  ComunidadesHead := N;
+  n := NormName(Nombre);
+  if n = '' then exit;
+  if FindComunidad(n) <> nil then exit;     // ya existe
+  node := NewComNode(n);
+  BSTInsert(ComRoot, node);
   Result := True;
 end;
 
-function Comunidades_Eliminar(const Nombre: String): Boolean;
-var C, Prev: PComunidad; M, T: PMember;
+function Comunidades_AgregarMiembro(const Nombre, Email: string): Boolean;
+var C: PComNode; e: string;
 begin
   Result := False;
-  Prev := nil; C := ComunidadesHead;
-  while C <> nil do
-  begin
-    if EqualCI(C^.Nombre, Nombre) then
-    begin
-      // liberar miembros
-      M := C^.Miembros;
-      while M <> nil do begin T := M^.Next; Dispose(M); M := T; end;
-      // sacar de la lista
-      if Prev = nil then ComunidadesHead := C^.Next else Prev^.Next := C^.Next;
-      Dispose(C);
-      Exit(True);
-    end;
-    Prev := C; C := C^.Next;
-  end;
-end;
-
-function Comunidades_AgregarMiembro(const NombreComunidad, Email: String): Boolean;
-var C: PComunidad; M: PMember;
-begin
-  Result := False;
-  if (Trim(NombreComunidad)='') or (Trim(Email)='') then Exit;
-
-  C := _BuscarComunidad(NombreComunidad);
-  if C = nil then Exit; // no existe comunidad
-
-  // Validar contra la lista de usuarios activa (Brandon o Víctor) vía callback
-  if not UsersAPI_UserExists(Email) then Exit;
-
-  if _MiembroExiste(C, Email) then Exit; // no duplicado
-
-  New(M);
-  M^.Email := Trim(Email);
-  M^.Next  := C^.Miembros;
-  C^.Miembros := M;
+  C := FindComunidad(Nombre);
+  if C = nil then exit;                     // no existe comunidad
+  e := NormName(Email);
+  if e = '' then exit;
+  // validar contra el padrón de usuarios (vía API de cada integrante)
+  if not UsersAPI_UserExists(e) then exit;
+  if MemberExists(C^.miembros, e) then exit;      // duplicado
+  MemberAdd(C^.miembros, e);
   Result := True;
 end;
 
-function Comunidades_EliminarMiembro(const NombreComunidad, Email: String): Boolean;
-var C: PComunidad; M, Prev: PMember;
+function Comunidades_PublicarMensaje(const Nombre, EmailAutor, Mensaje: string): Boolean;
+var C: PComNode; e, m: string;
 begin
   Result := False;
-  C := _BuscarComunidad(NombreComunidad);
-  if C = nil then Exit;
-
-  Prev := nil; M := C^.Miembros;
-  while M <> nil do
-  begin
-    if EqualCI(M^.Email, Email) then
-    begin
-      if Prev = nil then C^.Miembros := M^.Next else Prev^.Next := M^.Next;
-      Dispose(M);
-      Exit(True);
-    end;
-    Prev := M; M := M^.Next;
-  end;
+  C := FindComunidad(Nombre);
+  if C = nil then exit;                           // no existe
+  e := NormName(EmailAutor);
+  m := Trim(Mensaje);
+  if (e = '') or (m = '') then exit;
+  // debe ser miembro de la comunidad
+  if not MemberExists(C^.miembros, e) then exit;
+  MsgAdd(C^.mensajes, e, m, Now);
+  Inc(C^.msgCount);
+  Result := True;
 end;
 
-procedure Comunidades_Listar(out S: String);
-var C: PComunidad; M: PMember;
-begin
-  S := '';
-  C := ComunidadesHead;
-  while C <> nil do
-  begin
-    S += Format('Comunidad #%d: %s',[C^.Id, C^.Nombre]) + LineEnding;
-    if C^.Miembros = nil then
-      S += '  (sin miembros)' + LineEnding
-    else
-    begin
-      M := C^.Miembros;
-      while M <> nil do
-      begin
-        S += '  - ' + M^.Email + LineEnding;
-        M := M^.Next;
-      end;
-    end;
-    S += LineEnding;
-    C := C^.Next;
-  end;
-  if S = '' then S := '(no hay comunidades)';
-end;
-
-function Comunidades_ContarMiembros(const NombreComunidad: String): Integer;
-var C: PComunidad; M: PMember;
-begin
-  Result := 0;
-  C := _BuscarComunidad(NombreComunidad);
-  if (C = nil) or (C^.Miembros = nil) then Exit;
-  M := C^.Miembros;
-  while M <> nil do begin Inc(Result); M := M^.Next; end;
-end;
-
-function Comunidades_GenerarDOT(const DotPath: String): Boolean;
-var
-  sl: TStringList;
-  C: PComunidad;
-  M: PMember;
-  prevCID, cid, uid, firstUID, lastUID: String;
-  idx: Integer;
+function Comunidades_VerMensajes(const Nombre: string; Dest: TStrings): Boolean;
+var C: PComNode; p: PMsgNode;
 begin
   Result := False;
-  sl := TStringList.Create;
+  if (Dest = nil) then exit;
+  Dest.BeginUpdate;
   try
-    sl.Add('digraph Comunidades {');
-    sl.Add('  rankdir=LR;');
-    sl.Add('  graph [nodesep=0.6, ranksep=1.0, splines=ortho];');
-    sl.Add('  node  [shape=box, style=filled, fontname="Arial"];');
-    sl.Add('');
-
-    // Comunidades (azul claro) conectadas en cadena
-    prevCID := '';
-    C := ComunidadesHead;
-    while C <> nil do
+    Dest.Clear;
+    C := FindComunidad(Nombre);
+    if C = nil then exit;
+    p := C^.mensajes;
+    while p <> nil do
     begin
-      cid := 'C' + IntToStr(C^.Id);
-      sl.Add(Format('  %s [label="%s", fillcolor="#b3d9f2"];', [cid, _Esc(C^.Nombre)]));
-      if prevCID <> '' then sl.Add(Format('  %s -> %s;', [prevCID, cid]));
-      prevCID := cid;
-      C := C^.Next;
+      Dest.Add(Format('[%s] %s: %s',
+        [FormatDateTime('yyyy-mm-dd hh:nn', p^.fecha), p^.emailAutor, p^.texto]));
+      p := p^.next;
     end;
-    sl.Add('');
-
-    // Miembros (amarillo claro) colgando de cada comunidad
-    sl.Add('  node [fillcolor="#fff9c4"];');
-    C := ComunidadesHead;
-    while C <> nil do
-    begin
-      cid := 'C' + IntToStr(C^.Id);
-      firstUID := ''; lastUID := ''; idx := 0;
-
-      if C^.Miembros = nil then
-      begin
-        uid := Format('U_%s_vacio', [cid]);
-        sl.Add(Format('  %s [label="(sin miembros)"];', [uid]));
-        sl.Add(Format('  %s -> %s;', [cid, uid]));
-      end
-      else
-      begin
-        M := C^.Miembros;
-        while M <> nil do
-        begin
-          Inc(idx);
-          uid := Format('U_%s_%d_%s', [cid, idx, _IdSafe(M^.Email)]);
-          sl.Add(Format('  %s [label="%s"];', [uid, _Esc(M^.Email)]));
-          if firstUID = '' then firstUID := uid;
-          if lastUID <> '' then sl.Add(Format('  %s -> %s;', [lastUID, uid]));
-          lastUID := uid;
-          M := M^.Next;
-        end;
-        sl.Add(Format('  %s -> %s;', [cid, firstUID]));
-      end;
-
-      sl.Add('');
-      C := C^.Next;
-    end;
-
-    sl.Add('}');
-    sl.SaveToFile(DotPath);
     Result := True;
   finally
-    sl.Free;
+    Dest.EndUpdate;
   end;
 end;
 
-procedure Comunidades_ReportePNG(const CarpetaSalida: String);
-var
-  Carp, DotFile, PngFile: String;
-  P: TProcess;
+procedure InOrderMensajes(N: PComNode; Dest: TStrings);
+var p: PMsgNode;
 begin
-  Carp := IncludeTrailingPathDelimiter(CarpetaSalida);
-  if not ForceDirectories(Carp) then
-    raise Exception.Create('No se pudo crear la carpeta de reportes: ' + Carp);
+  if (N = nil) or (Dest = nil) then exit;
+  InOrderMensajes(N^.left, Dest);
+  Dest.Add(Format('--- Comunidad: %s (creada %s, mensajes %d) ---',
+    [N^.nombre, FormatDateTime('yyyy-mm-dd', N^.fechaCreacion), N^.msgCount]));
+  p := N^.mensajes;
+  if p = nil then
+    Dest.Add('  (sin mensajes)')
+  else
+    while p <> nil do
+    begin
+      Dest.Add(Format('  [%s] %s: %s',
+        [FormatDateTime('yyyy-mm-dd hh:nn', p^.fecha), p^.emailAutor, p^.texto]));
+      p := p^.next;
+    end;
+  InOrderMensajes(N^.right, Dest);
+end;
 
-  DotFile := Carp + 'comunidades.dot';
-  PngFile := Carp + 'comunidades.png';
-
-  if not Comunidades_GenerarDOT(DotFile) then
-    raise Exception.Create('No se pudo generar el archivo DOT de comunidades.');
-
-  // Render con Graphviz
-  P := TProcess.Create(nil);
+procedure Comunidades_VerMensajesTodas(Dest: TStrings);
+begin
+  if Dest = nil then exit;
+  Dest.BeginUpdate;
   try
-    P.Executable := 'dot';
-    P.Parameters.Add('-Tpng');
-    P.Parameters.Add(DotFile);
-    P.Parameters.Add('-o');
-    P.Parameters.Add(PngFile);
-    P.Options := [poWaitOnExit];
-    P.Execute;
-    if P.ExitStatus <> 0 then
-      raise Exception.Create('Error al ejecutar graphviz (dot).');
+    Dest.Clear;
+    InOrderMensajes(ComRoot, Dest);
   finally
-    P.Free;
+    Dest.EndUpdate;
+  end;
+end;
+
+function Comunidades_Existe(const Nombre: string): Boolean;
+begin
+  Result := FindComunidad(Nombre) <> nil;
+end;
+
+{======================= Reporte Graphviz =======================}
+
+procedure EmitirDOT_ComunidadesBST(AOut: TStrings);
+
+  procedure Rec(N: PComNode);
+  var
+    myId, leftId, rightId, etq: string;
+  begin
+    if N = nil then Exit;
+
+    Rec(N^.left);
+
+    // nodo actual
+    myId := IdSafe('n_'+IntToHex(PtrUInt(N), SizeOf(Pointer)*2));
+    etq  :=
+      'Nombre: '  + LabelSafe(N^.nombre)                + '\n' +
+      'Creación: ' + FormatDateTime('yyyy-mm-dd', N^.fechaCreacion) + '\n' +
+      'Mensajes: ' + IntToStr(N^.msgCount);
+
+    AOut.Add(Format('    %s [label="%s", shape=box, style="rounded,filled", fillcolor="#EAF7FF"];',
+                    [myId, etq]));
+
+    if N^.left <> nil then
+    begin
+      leftId := IdSafe('n_'+IntToHex(PtrUInt(N^.left), SizeOf(Pointer)*2));
+      AOut.Add(Format('    %s -> %s;', [myId, leftId]));
+    end;
+    if N^.right <> nil then
+    begin
+      rightId := IdSafe('n_'+IntToHex(PtrUInt(N^.right), SizeOf(Pointer)*2));
+      AOut.Add(Format('    %s -> %s;', [myId, rightId]));
+    end;
+
+    Rec(N^.right);
+  end;
+
+begin
+  if AOut = nil then Exit;
+  AOut.BeginUpdate;
+  try
+    AOut.Clear;
+    AOut.Add('digraph G {');
+    AOut.Add('  rankdir=TB; fontname="Helvetica";');
+    AOut.Add('  labelloc="t"; label="Comunidades (Árbol BST)";');
+    AOut.Add('  subgraph cluster_0 { label="BST de Comunidades"; style="rounded"; color="#777777";');
+
+    if ComRoot = nil then
+      AOut.Add('    vacio [label="(sin comunidades)", shape=box, style="rounded,filled", fillcolor="#FBFBFB"];')
+    else
+      Rec(ComRoot);
+
+    AOut.Add('  }');
+    AOut.Add('}');
+  finally
+    AOut.EndUpdate;
+  end;
+end;
+
+function GenerarReporteComunidades(const OutDir: string): string;
+
+  procedure GuardarTexto(const Ruta, Contenido: string);
+  var fs: TFileStream; S: RawByteString;
+  begin
+    fs := TFileStream.Create(Ruta, fmCreate);
+    try
+      S := UTF8Encode(Contenido);
+      if Length(S) > 0 then
+        fs.WriteBuffer(S[1], Length(S));
+    finally
+      fs.Free;
+    end;
+  end;
+
+  procedure EjecutarDOT(const DotFile, PngFile: string);
+  var P: TProcess;
+  begin
+    P := TProcess.Create(nil);
+    try
+      P.Executable := 'dot';
+      P.Parameters.Add('-Tpng');
+      P.Parameters.Add(DotFile);
+      P.Parameters.Add('-o');
+      P.Parameters.Add(PngFile);
+      P.Options := [poUsePipes, poNoConsole, poWaitOnExit];
+      P.Execute;
+    finally
+      P.Free;
+    end;
+  end;
+
+var
+  sb      : TStringList;
+  dotPath : string;
+  pngPath : string;
+  dir     : string;
+begin
+  dir := IncludeTrailingPathDelimiter(OutDir);
+  if (dir = '') then dir := './';
+
+  sb := TStringList.Create;
+  try
+    EmitirDOT_ComunidadesBST(sb);
+    dotPath := dir + 'comunidades.dot';
+    pngPath := dir + 'comunidades.png';
+    GuardarTexto(dotPath, sb.Text);
+    EjecutarDOT(dotPath, pngPath);
+    Result := pngPath;
+  finally
+    sb.Free;
   end;
 end;
 

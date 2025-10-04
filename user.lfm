@@ -2,10 +2,10 @@ object Form3: TForm3
   Left = 274
   Height = 295
   Top = 32
-  Width = 480
+  Width = 721
   Caption = 'Form3'
   ClientHeight = 295
-  ClientWidth = 480
+  ClientWidth = 721
   object Button1: TButton
     Left = 160
     Height = 25
@@ -99,5 +99,40 @@ object Form3: TForm3
     Font.Style = [fsBold, fsItalic]
     ParentColor = False
     ParentFont = False
+  end
+  object Button10: TButton
+    Left = 472
+    Height = 25
+    Top = 40
+    Width = 128
+    Caption = 'Borradores'
+    TabOrder = 9
+    OnClick = Button10Click
+  end
+  object Button11: TButton
+    Left = 480
+    Height = 25
+    Top = 96
+    Width = 112
+    Caption = 'Favoritos'
+    TabOrder = 10
+    OnClick = Button11Click
+  end
+  object Button12: TButton
+    Left = 448
+    Height = 48
+    Top = 200
+    Width = 216
+    Caption = 'Publicar_mensaje_Comunidad'
+    TabOrder = 11
+    OnClick = Button12Click
+  end
+  object Button13: TButton
+    Left = 472
+    Height = 40
+    Top = 144
+    Width = 152
+    Caption = 'EliminarContacts'
+    TabOrder = 12
   end
 end

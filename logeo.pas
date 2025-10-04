@@ -5,7 +5,8 @@ unit logeo;
 interface
 
 uses
-  Classes, SysUtils, Forms, Controls, Graphics, Dialogs, StdCtrls, Process;
+  Classes, SysUtils, Forms, Controls, Graphics, Dialogs, StdCtrls, Process,
+  uBFavorites; // <<< FAVORITOS (Árbol B)
 
 type
   { ====== ESTRUCTURAS BASE ====== }
@@ -66,6 +67,7 @@ type
     ProgHead, ProgTail: PProg;   // cola
     TrashTop: PTrash;            // pila
     ContactTail: PContacto;      // circular
+    FavTree: TBFavorites;        // <<< FAVORITOS: Árbol B por usuario
     Next: PUsuario;              // lista simple
   end;
 
@@ -117,8 +119,8 @@ var
 
 // === API que usan otros units ===
 function BuscarUsuarioPorEmail(const AEmail: string): PUsuario;
+function BuscarUsuarioPorNombre(const AUsuario: string): PUsuario;
 procedure AgregarUsuario(const ANombre, AUsuario, AEmail, ATelefono, APassword: string);
-
 
 // —— Reportes Graphviz ——
 function ExportarUsuariosDOT(const Path: string): Boolean;            // lista simple de usuarios
@@ -128,7 +130,6 @@ function ExportarRelacionesDOT(const Path: string): Boolean;          // matriz 
 function RenderizarPNGConDot(const DotPath, PngPath: string): Boolean;
 
 implementation
-
 
 // para evitar ciclos en la interfaz y no provocar "Duplicate identifier LOGEO".
 uses
@@ -188,6 +189,18 @@ begin
   end;
 end;
 
+function BuscarUsuarioPorNombre(const AUsuario: string): PUsuario;
+var Cur: PUsuario;
+begin
+  Result := nil;
+  Cur := UsuariosHead;
+  while Cur <> nil do
+  begin
+    if EqualCI(Cur^.Usuario, AUsuario) then Exit(Cur);
+    Cur := Cur^.Next;
+  end;
+end;
+
 procedure AgregarUsuario(const ANombre, AUsuario, AEmail, ATelefono, APassword: string);
 var Nuevo: PUsuario;
 begin
@@ -203,6 +216,7 @@ begin
   Nuevo^.ProgHead := nil;  Nuevo^.ProgTail := nil;
   Nuevo^.TrashTop := nil;
   Nuevo^.ContactTail := nil;
+  Nuevo^.FavTree := TBFavorites.Create; // <<< FAVORITOS: inicializar árbol B
   // insertar al inicio (LIFO)
   Nuevo^.Next := UsuariosHead;
   UsuariosHead := Nuevo;
@@ -245,7 +259,7 @@ begin
     begin
       ShowMessage('¡Bienvenido, Administrador!');
       Hide;
-      // OJO: calificado con la unidad para evitar "Identifier not found"
+      // aca pasa al form2 despues de loguearse
       root.Form2 := root.TForm2.Create(Application);
       root.Form2.Show;
     end
@@ -294,6 +308,7 @@ begin
   AgregarUsuario('', '', email, '', password);
   ShowMessage('Usuario registrado con éxito. Ahora puede iniciar sesión.');
 end;
+
 {====================== REPORTES GRAPHVIZ ======================}
 
 function ExportarComunidadesDOT(const Path: string): Boolean;
@@ -645,7 +660,97 @@ begin
   end;
 end;
 
-{====================== INITIALIZATION ======================}
+{====================== LIBERACIÓN DE MEMORIA ======================}
+procedure LiberarUsuarioEstructuras(U: PUsuario);
+var
+  M, MN: PMail;
+  P, PN: PProg;
+  T, TN: PTrash;
+  C, CN, H: PContacto;
+begin
+  if U = nil then Exit;
+
+  // Inbox (lista doble)
+  M := U^.InboxHead;
+  while M <> nil do begin MN := M^.Next; Dispose(M); M := MN; end;
+
+  // Programados (cola)
+  P := U^.ProgHead;
+  while P <> nil do begin PN := P^.Next; Dispose(P); P := PN; end;
+
+  // Papelera (pila)
+  T := U^.TrashTop;
+  while T <> nil do begin TN := T^.Next; Dispose(T); T := TN; end;
+
+  // Contactos (lista circular)
+  if U^.ContactTail <> nil then
+  begin
+    H := U^.ContactTail^.Next;
+    C := H;
+    repeat
+      CN := C^.Next;
+      Dispose(C);
+      C := CN;
+    until C = H;
+    U^.ContactTail := nil;
+  end;
+
+  // Favoritos (árbol B)
+  if U^.FavTree <> nil then
+  begin
+    U^.FavTree.Free;
+    U^.FavTree := nil;
+  end;
+end;
+
+procedure LiberarUsuarios;
+var
+  U, UN: PUsuario;
+begin
+  U := UsuariosHead;
+  while U <> nil do
+  begin
+    UN := U^.Next;
+    LiberarUsuarioEstructuras(U);
+    Dispose(U);
+    U := UN;
+  end;
+  UsuariosHead := nil;
+  CurrentUser := nil;
+end;
+
+procedure LiberarRelaciones;
+var
+  R, RN: PRel;
+begin
+  R := RelHead;
+  while R <> nil do
+  begin
+    RN := R^.Next;
+    Dispose(R);
+    R := RN;
+  end;
+  RelHead := nil;
+end;
+
+procedure LiberarComunidades;
+var
+  C, CN: PComunidad;
+  M, MN: PMember;
+begin
+  C := ComunidadesHead;
+  while C <> nil do
+  begin
+    CN := C^.Next;
+    M := C^.Miembros;
+    while M <> nil do begin MN := M^.Next; Dispose(M); M := MN; end;
+    Dispose(C);
+    C := CN;
+  end;
+  ComunidadesHead := nil;
+end;
+
+{====================== INITIALIZATION/FINALIZATION ======================}
 initialization
   // Inicializa todo y ASEGURA root
   UsuariosHead := nil; CurrentUser := nil;
@@ -654,6 +759,12 @@ initialization
   NextId := 1; NextMailId := 1; NextComunidadId := 1;
 
   AsegurarRoot; // garantiza root@edd.com / root123
+
+finalization
+  // Limpieza ordenada (incluye FavTree)
+  LiberarUsuarios;
+  LiberarRelaciones;
+  LiberarComunidades;
 
 end.
 
