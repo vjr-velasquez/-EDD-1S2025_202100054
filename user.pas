@@ -27,6 +27,7 @@ type
     Label1: TLabel;
     procedure Button10Click(Sender: TObject);
     procedure Button11Click(Sender: TObject);
+    procedure Button12Click(Sender: TObject);
     procedure Button13Click(Sender: TObject);
     procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
@@ -2197,6 +2198,11 @@ begin
   finally
     W.Free;
   end;
+end;
+
+procedure TForm3.Button12Click(Sender: TObject);
+begin
+
 end;
 
 procedure TForm3.Button13Click(Sender: TObject);

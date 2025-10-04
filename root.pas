@@ -7,7 +7,7 @@ interface
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, StdCtrls,
   fpjson, jsonparser, Process, LCLIntf,
-  logeo,uComunidades,uUsuariosAPI,comunidad; // estructuras y APIs exportadas desde logeo.pas
+  logeo,uComunidades,uUsuariosAPI,comunidad,LazFileUtils; // estructuras y APIs exportadas desde logeo.pas
 
 type
   { TForm2 (Root) }
@@ -18,10 +18,10 @@ type
     Button4: TButton; // Regresar a login
     Button5: TButton;
     comunidades: TButton; // Comunidades (ventana minimalista)
-    Button6: TButton; // Inbox por usuario (reporte)
     Label1: TLabel;
     repoComunidades: TButton;
     procedure Button5Click(Sender: TObject);
+    //procedure Button6Click(Sender: TObject);
     procedure comunidadesClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure Button1Click(Sender: TObject);
@@ -108,10 +108,19 @@ begin
 end;
 
 procedure TForm2.Button5Click(Sender: TObject);
+var L: TStringList;
 begin
-
+  L := TStringList.Create;
+  try
+    Comunidades_VerMensajesTodas(L);
+    if L.Count = 0 then
+      ShowMessage('(no hay comunidades ni mensajes)')
+    else
+      ShowMessage(L.Text); // ventana emergente con todo
+  finally
+    L.Free;
+  end;
 end;
-
 {================== Carga masiva usuarios ==================}
 procedure TForm2.Button1Click(Sender: TObject);
 var
@@ -228,10 +237,10 @@ begin
 end;
 
 procedure TForm2.repoComunidadesClick(Sender: TObject);
+var png: string;
 begin
-  // Genera DOT y PNG en la carpeta "Root-Reportes" junto al exe
-  Comunidades_ReportePNG(ExtractFilePath(ParamStr(0)) + 'Root-Reportes');
-  ShowMessage('Reporte de comunidades generado en Root-Reportes/.');
+  png := GenerarReporteComunidades(ExtractFilePath(Application.ExeName));
+  ShowMessage('Reporte generado: ' + LineEnding + png);
 end;
 
 end.

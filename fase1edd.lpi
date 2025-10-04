@@ -88,6 +88,13 @@
         <IsPartOfProject Value="True"/>
         <UnitName Value="uBSTContacts"/>
       </Unit>
+      <Unit>
+        <Filename Value="mensajecomunidad.pas"/>
+        <IsPartOfProject Value="True"/>
+        <ComponentName Value="Form5"/>
+        <ResourceBaseClass Value="Form"/>
+        <UnitName Value="mensajeComunidad"/>
+      </Unit>
     </Units>
   </ProjectOptions>
   <CompilerOptions>

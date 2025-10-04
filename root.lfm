@@ -2,10 +2,10 @@ object Form2: TForm2
   Left = 880
   Height = 301
   Top = 32
-  Width = 498
+  Width = 543
   Caption = 'Form2'
   ClientHeight = 301
-  ClientWidth = 498
+  ClientWidth = 543
   object Label1: TLabel
     Left = 120
     Height = 19
