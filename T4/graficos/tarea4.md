@@ -18,3 +18,13 @@ Conexiones: A–B, A–C, B–D
 ![Grafo ejemplo practico 3](3_20251015_151910.png)
 
 
+# Funcionalidad del programa 
+
+![Consola del programa](consola.png)
+
+
+
+![Ciudades](ciudades.png)
+
+![listaAdyacencia](listaAdyacencia.png)
+
