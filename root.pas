@@ -17,10 +17,12 @@ type
     Button3: TButton; // Reporte de Relaciones (matriz)
     Button4: TButton; // Regresar a login
     Button5: TButton;
+    Button6: TButton; // carga de masiva de correos
     comunidades: TButton; // Comunidades (ventana minimalista)
     Label1: TLabel;
     repoComunidades: TButton;
     procedure Button5Click(Sender: TObject);
+    procedure Button6Click(Sender: TObject);
     //procedure Button6Click(Sender: TObject);
     procedure comunidadesClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
@@ -121,6 +123,12 @@ begin
     L.Free;
   end;
 end;
+
+procedure TForm2.Button6Click(Sender: TObject);
+begin
+
+end;
+
 {================== Carga masiva usuarios ==================}
 procedure TForm2.Button1Click(Sender: TObject);
 var

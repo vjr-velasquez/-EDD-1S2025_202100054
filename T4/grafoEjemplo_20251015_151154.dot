@@ -1,0 +1,17 @@
+graph G {
+  layout=dot;
+  nodesep=0.5;
+  ranksep=0.8;
+  margin=0.1;
+  node [shape=circle, fontsize=16, width=0.9, fixedsize=true, style=""];
+  edge [fontsize=12];
+  "A";
+  "B";
+  "C";
+  "D";
+  "A" -- "B";
+  "A" -- "C";
+  "B" -- "D";
+  {rank=same; "B"; "C";}
+  {rank=min; "A";}
+}

@@ -325,7 +325,7 @@ type
     procedure SelectAll(Sender: TObject);
     procedure ClearAll(Sender: TObject);
     procedure DeleteChecked(Sender: TObject);
-    function DeleteByEmail(const CEmail: string): Boolean; // <- usa Self.U (sin parámetro U)
+    function DeleteByEmail(const CEmail: string): Boolean;
   public
     constructor CreateForUser(AOwner: TComponent; AUser: PUsuario);
   end;
@@ -2103,6 +2103,7 @@ begin
     Prev := C; C := C^.Next;
   until C = H;
 end;
+
 
 procedure TContactsBulkDelWin.DeleteChecked(Sender: TObject);
 var

@@ -134,5 +134,6 @@ object Form3: TForm3
     Width = 152
     Caption = 'EliminarContacts'
     TabOrder = 12
+    OnClick = Button13Click
   end
 end
