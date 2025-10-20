@@ -8,6 +8,7 @@ uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, StdCtrls,
   ExtCtrls, ComCtrls, Grids, LCLIntf, Process;
 
+
 type
   { TForm3 }
   TForm3 = class(TForm)
@@ -44,19 +45,14 @@ type
     procedure SafeMsg(const S: string);
     function ContainsTextCI(const Haystack, Needle: string): Boolean;
     function ParseDate(const S: string; out D: TDateTime): Boolean;
-    procedure AppendInbox(Dest: Pointer; const ARemitente, AAsunto, AMensaje: string;
-                          const AFecha: TDateTime; AProgramado: Boolean; const AEstado: string);
-    procedure PushTrash(U: Pointer; const M);
-    procedure IncRel(const FromEmail, ToEmail: string);
   end;
 
 var
   Form3: TForm3;
-
 implementation
 
 uses
-  logeo, uTypes, uAVLDrafts, uBFavorites, uAVL; // uAVL = AVL de borradores
+  logeo, uTypes, uAVLDrafts, uBFavorites, uAVL,uLoginAudit; // uAVL = AVL de borradores
 
 {$R *.lfm}
 
@@ -94,71 +90,6 @@ end;
 function TForm3.ParseDate(const S: string; out D: TDateTime): Boolean;
 begin
   Result := (Trim(S) <> '') and TryStrToDateTime(S, D);
-end;
-
-procedure TForm3.IncRel(const FromEmail, ToEmail: string);
-var
-  C, N: PRel;
-  function EqualCI(const A, B: string): Boolean; inline;
-  begin
-    Result := LowerCase(A) = LowerCase(B);
-  end;
-begin
-  C := RelHead;
-  while C <> nil do
-  begin
-    if EqualCI(C^.FromEmail, FromEmail) and EqualCI(C^.ToEmail, ToEmail) then
-    begin
-      Inc(C^.Count);
-      Exit;
-    end;
-    C := C^.Next;
-  end;
-  New(N);
-  N^.FromEmail := FromEmail;
-  N^.ToEmail := ToEmail;
-  N^.Count := 1;
-  N^.Next := RelHead;
-  RelHead := N;
-end;
-
-procedure TForm3.AppendInbox(Dest: Pointer; const ARemitente, AAsunto, AMensaje: string;
-  const AFecha: TDateTime; AProgramado: Boolean; const AEstado: string);
-var
-  DU: PUsuario;
-  N: PMail;
-begin
-  if Dest = nil then Exit;
-  DU := PUsuario(Dest);
-  New(N);
-  N^.Id := NextMailId; Inc(NextMailId);
-  N^.Remitente := ARemitente;
-  N^.Asunto := AAsunto;
-  N^.Mensaje := AMensaje;
-  N^.Fecha := AFecha;
-  N^.Programado := AProgramado;
-  N^.Estado := AEstado;
-  N^.Prev := DU^.InboxTail;
-  N^.Next := nil;
-  if DU^.InboxTail <> nil then
-    DU^.InboxTail^.Next := N
-  else
-    DU^.InboxHead := N;
-  DU^.InboxTail := N;
-end;
-
-procedure TForm3.PushTrash(U: Pointer; const M);
-var
-  DU: PUsuario;
-  N: PTrash;
-  TM: TMail absolute M;
-begin
-  DU := PUsuario(U);
-  if DU = nil then Exit;
-  New(N);
-  N^.Mail := TM;
-  N^.Next := DU^.TrashTop;
-  DU^.TrashTop := N;
 end;
 
 {================= Subventanas =================}
@@ -524,7 +455,7 @@ begin
 
   backup := M^; Dispose(M);
 
-  Form3.PushTrash(U, backup);
+  //Form3.PushTrash(U, backup);
   CargarLista(nil);
   ShowMessage('Correo movido a Papelera.');
 end;
@@ -566,10 +497,10 @@ begin
   Dest := BuscarUsuarioPorEmail(para);
   if Dest = nil then begin ShowMessage('El destinatario no existe.'); Exit; end;
 
-  Form3.AppendInbox(Dest, CurrentUser^.Email, asunto, mensaje, Now, False, 'nuevo');
-  Form3.IncRel(CurrentUser^.Email, Dest^.Email);
-  ShowMessage('Correo enviado.');
-  edtPara.Clear; edtAsunto.Clear; memoMsg.Clear;
+  //Form3.AppendInbox(Dest, CurrentUser^.Email, asunto, mensaje, Now, False, 'nuevo');
+  //Form3.IncRel(CurrentUser^.Email, Dest^.Email);
+  //ShowMessage('Correo enviado.');
+  //edtPara.Clear; edtAsunto.Clear; memoMsg.Clear;
 end;
 
 {--- Programar ---}
@@ -721,8 +652,8 @@ begin
     Dest := BuscarUsuarioPorEmail(C^.Destinatario);
     if Dest <> nil then
     begin
-      Form3.AppendInbox(Dest, C^.Remitente, C^.Asunto, C^.Mensaje, C^.FechaProg, True, 'nuevo');
-      Form3.IncRel(C^.Remitente, C^.Destinatario);
+      //Form3.AppendInbox(Dest, C^.Remitente, C^.Asunto, C^.Mensaje, C^.FechaProg, True, 'nuevo');
+      //Form3.IncRel(C^.Remitente, C^.Destinatario);
       Inc(processed);
     end;
     Dispose(C);
@@ -809,7 +740,7 @@ begin
     Prev^.Next := P^.Next;
   Dispose(P);
 
-  Form3.AppendInbox(CurrentUser, M.Remitente, M.Asunto, M.Mensaje, Now, M.Programado, 'nuevo');
+  //Form3.AppendInbox(CurrentUser, M.Remitente, M.Asunto, M.Mensaje, Now, M.Programado, 'nuevo');
   ShowMessage('Restaurado a bandeja.');
   LoadList;
 end;
@@ -1953,8 +1884,8 @@ begin
   Dest := BuscarUsuarioPorEmail(D.Destinatario);
   if Dest = nil then begin ShowMessage('El destinatario no existe.'); Exit; end;
 
-  Form3.AppendInbox(Dest, D.Remitente, D.Asunto, D.Mensaje, Now, False, 'nuevo');
-  Form3.IncRel(D.Remitente, D.Destinatario);
+  //Form3.AppendInbox(Dest, D.Remitente, D.Asunto, D.Mensaje, Now, False, 'nuevo');
+  //Form3.IncRel(D.Remitente, D.Destinatario);
   Drafts.Delete(D.ID);
 
   ShowMessage('Correo enviado desde borrador.');
@@ -2277,6 +2208,9 @@ end;
 
 procedure TForm3.Button9Click(Sender: TObject);
 begin
+  if (CurrentUser <> nil) then
+    LoginAudit_Add(CurrentUser^.Email, 'LOGOUT');
+
   CurrentUser := nil;
   if Assigned(Form1) then
   begin

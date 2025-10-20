@@ -92,8 +92,25 @@
         <Filename Value="mensajecomunidad.pas"/>
         <IsPartOfProject Value="True"/>
         <ComponentName Value="Form5"/>
+        <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
         <UnitName Value="mensajeComunidad"/>
+      </Unit>
+      <Unit>
+        <Filename Value="contronlogueo.pas"/>
+        <IsPartOfProject Value="True"/>
+        <ComponentName Value="Form6"/>
+        <ResourceBaseClass Value="Form"/>
+        <UnitName Value="contronLogueo"/>
+      </Unit>
+      <Unit>
+        <Filename Value="blockchain.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="uloginaudit.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="uLoginAudit"/>
       </Unit>
     </Units>
   </ProjectOptions>

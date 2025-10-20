@@ -1,0 +1,15 @@
+{
+  "auditoria" : [{
+      "email" : "lgarcia@edd.com",
+      "timestamp" : "2025-10-19 20:14:07",
+      "status" : "LOGOUT"
+    }, {
+      "email" : "mitzep@edd.com",
+      "timestamp" : "2025-10-19 20:14:19",
+      "status" : "LOGOUT"
+    }, {
+      "email" : "mshuttleworth@edd.com",
+      "timestamp" : "2025-10-19 20:14:32",
+      "status" : "LOGOUT"
+    }]
+}

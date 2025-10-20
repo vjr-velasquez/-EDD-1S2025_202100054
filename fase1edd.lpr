@@ -10,8 +10,9 @@ uses
   Forms,
   logeo,  // Form1 (login) y estructuras
   root,   // Form2 (root)
-  user, uUsuariosAPI, uUsuariosAPI_VictorAdapter, uComunidades,
-  comunidad, uBFavorites,uAVL, uBSTContacts, mensajeComunidad;
+  user, uUsuariosAPI, uUsuariosAPI_VictorAdapter, uComunidades, comunidad,
+  uBFavorites, uAVL, uBSTContacts, mensajeComunidad, contronLogueo, blockchain,
+  uLoginAudit;
 
 {$R *.res}
 
@@ -22,6 +23,7 @@ begin
   Application.CreateForm(TForm1, Form1); // solo auto-creamos el login
   Application.CreateForm(TForm4, Form4);
   Application.CreateForm(TForm5, Form5);
+  Application.CreateForm(TForm6, Form6);
   Application.Run;
 end.
 
