@@ -6,8 +6,8 @@ interface
 
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, StdCtrls,
-  ExtCtrls, ComCtrls, Grids, LCLIntf, Process;
-
+  ExtCtrls, ComCtrls, Grids, LCLIntf, Process,
+  uTypes;  // Debe exportar PUsuario, TMail, PTrash, PContacto, PProg, PRel, CurrentUser, etc.
 
 type
   { TForm3 }
@@ -15,7 +15,7 @@ type
     Button1: TButton;  // Bandeja de Entrada
     Button10: TButton; // Borradores (AVL)
     Button11: TButton; // Favoritos (Árbol B)
-    Button12: TButton;
+    Button12: TButton; // (libre) - puedes abrir carpeta reportes si quieres
     Button13: TButton; // Eliminar Contactos (lote)
     Button2: TButton;  // Enviar Correo
     Button3: TButton;  // Papelera
@@ -43,18 +43,70 @@ type
     procedure AfterConstruction; override;
   private
     procedure SafeMsg(const S: string);
-    function ContainsTextCI(const Haystack, Needle: string): Boolean;
-    function ParseDate(const S: string; out D: TDateTime): Boolean;
   end;
 
 var
   Form3: TForm3;
+
 implementation
 
 uses
-  logeo, uTypes, uAVLDrafts, uBFavorites, uAVL,uLoginAudit; // uAVL = AVL de borradores
+  fgl,               // ← si usas el LZW con TFPGMap
+  logeo, uAVLDrafts, uBFavorites, uAVL, uLoginAudit, uMerkle, uBlockchain;
 
 {$R *.lfm}
+
+// ---- LZW (forward para evitar orden)
+function LZW_CompressToText(const S: string): string; forward;
+
+// ===== LZW: comprime un string a "códigos" separados por espacio =====
+type
+  TStringIntMap = specialize TFPGMap<string, Integer>;
+
+function LZW_CompressToText(const S: string): string;
+var
+  dict: TStringIntMap;
+  i, code, idx: Integer;
+  c, w, wk: string;
+  outCodes: TStringList;
+begin
+  dict := TStringIntMap.Create;
+  outCodes := TStringList.Create;
+  try
+    dict.Sorted := True;
+    for i := 0 to 255 do
+      dict.Add(Chr(i), i);
+
+    w := '';
+    for i := 1 to Length(S) do
+    begin
+      c := S[i];
+      wk := w + c;
+      if dict.Find(wk, idx) then
+        w := wk
+      else
+      begin
+        if w <> '' then
+        begin
+          dict.Find(w, idx);
+          outCodes.Add(IntToStr(dict.Data[idx]));
+        end;
+        code := dict.Count;
+        dict.Add(wk, code);
+        w := c;
+      end;
+    end;
+
+    if w <> '' then
+      if dict.Find(w, idx) then
+        outCodes.Add(IntToStr(dict.Data[idx]));
+
+    Result := Trim(StringReplace(outCodes.Text, LineEnding, ' ', [rfReplaceAll]));
+  finally
+    outCodes.Free;
+    dict.Free;
+  end;
+end;
 
 {--- Ventana de texto simple ---}
 procedure ShowTextWindow(const ATitle, AText: string);
@@ -82,18 +134,10 @@ begin
   ShowMessage(S);
 end;
 
-function TForm3.ContainsTextCI(const Haystack, Needle: string): Boolean;
-begin
-  Result := Pos(LowerCase(Needle), LowerCase(Haystack)) > 0;
-end;
+{================= Subventanas (clases internas) =================}
 
-function TForm3.ParseDate(const S: string; out D: TDateTime): Boolean;
-begin
-  Result := (Trim(S) <> '') and TryStrToDateTime(S, D);
-end;
-
-{================= Subventanas =================}
 type
+  // Inbox
   TInboxWin = class(TForm)
   private
     U: PUsuario;
@@ -114,6 +158,7 @@ type
     constructor CreateForUser(AOwner: TComponent; AUser: PUsuario);
   end;
 
+  // Enviar
   TSendWin = class(TForm)
   private
     edtPara, edtAsunto: TEdit;
@@ -124,6 +169,7 @@ type
     constructor CreateSimple(AOwner: TComponent);
   end;
 
+  // Programar envío
   TProgWin = class(TForm)
   private
     edtPara, edtAsunto, edtFecha: TEdit;
@@ -134,6 +180,7 @@ type
     constructor CreateSimple(AOwner: TComponent);
   end;
 
+  // Lista programados
   TProgListWin = class(TForm)
   private
     LV: TListView;
@@ -146,6 +193,7 @@ type
     constructor CreateSimple(AOwner: TComponent);
   end;
 
+  // Papelera
   TTrashWin = class(TForm)
   private
     LV: TListView;
@@ -158,6 +206,7 @@ type
     constructor CreateSimple(AOwner: TComponent);
   end;
 
+  // Contactos (lista circular)
   TContactsWin = class(TForm)
   private
     pnlTop: TPanel;
@@ -179,6 +228,7 @@ type
     constructor CreateSimple(AOwner: TComponent);
   end;
 
+  // Perfil
   TProfileWin = class(TForm)
   private
     lblNom, lblUsu, lblTel, lblPass: TLabel;
@@ -189,6 +239,7 @@ type
     constructor CreateSimple(AOwner: TComponent);
   end;
 
+  // Reportes (incluye matriz relaciones)
   TMatrixWin = class(TForm)
   private
     Grid: TStringGrid;
@@ -211,6 +262,8 @@ type
   private
     btnGen, btnMatriz, btnCerrar: TButton;
     btnDotAll, btnRenderAll: TButton;
+    btnMerkleRoot, btnMerkleDOT: TButton;  // <-- NUEVOS
+    btnBC_DOT, btnBC_PNG: TButton; // blockchain
     lblHint: TLabel;
     function ReportDir: string;
     function SafeEmail(const S: string): string;
@@ -225,27 +278,36 @@ type
     procedure WriteDOT_Contactos(U: PUsuario; const Path: string);
     procedure WriteDOT_Usuarios(const Path: string);
     procedure RenderOnePNG(const DotPath: string);
+    procedure BtnMerkleRootClick(Sender: TObject);
+    procedure BtnMerkleDOTClick(Sender: TObject);
+
+    procedure BtnBlockchainDOTClick(Sender: TObject);
+    procedure BtnBlockchainPNGClick(Sender: TObject);
+
   public
     constructor CreateSimple(AOwner: TComponent);
   end;
 
-  // === NUEVA SUBVENTANA: Favoritos (Árbol B) ===
+  // Favoritos (Árbol B)
   TFavoritesWin = class(TForm)
   private
     U: PUsuario;
     LV: TListView;
     pnlBottom: TPanel;
     btnSelAll, btnClear, btnGuardar, btnVerPNG, btnCerrar: TButton;
+    btnDescargar: TButton;                          // ← NUEVO
     procedure LoadInbox;
     procedure SelectAll(Sender: TObject);
     procedure ClearAll(Sender: TObject);
     procedure SaveFavorites(Sender: TObject);
     procedure OpenPNG(Sender: TObject);
+    procedure DownloadSelected(Sender: TObject);    // ← NUEVO
+
   public
     constructor CreateForUser(AOwner: TComponent; AUser: PUsuario);
   end;
 
-  // === NUEVA SUBVENTANA: Eliminación MASIVA de contactos ===
+  // Eliminación MASIVA de contactos
   TContactsBulkDelWin = class(TForm)
   private
     U: PUsuario;
@@ -261,7 +323,7 @@ type
     constructor CreateForUser(AOwner: TComponent; AUser: PUsuario);
   end;
 
-  // === BORRADORES (AVL) ===
+  // Borradores (AVL)
   TDraftsWin = class(TForm)
   private
     LV: TListView;
@@ -273,6 +335,7 @@ type
     memoMsg: TMemo;
     cmbRec: TComboBox;
     btnNuevo, btnGuardar, btnEliminar, btnEnviar, btnExportDOT, btnVerPNG, btnCerrar: TButton;
+    btnDescargar: TButton;  // NUEVO
     procedure LoadList(Sender: TObject);
     function ReadDraftFromForm(out D: TDraft): Boolean;
     procedure Nuevo(Sender: TObject);
@@ -282,12 +345,13 @@ type
     procedure ExportDOT(Sender: TObject);
     procedure VerPNG(Sender: TObject);
     procedure OnSelect(Sender: TObject; Item: TListItem; Selected: Boolean);
+    procedure DescargarBorrador(Sender: TObject); // NUEVO
     function ReportDir: string;
   public
     constructor CreateSimple(AOwner: TComponent);
   end;
 
-{--- Inbox ---}
+{--- Helpers de Inbox ---}
 
 function TInboxWin.ContainsTextCI(const Haystack, Needle: string): Boolean;
 begin
@@ -300,6 +364,8 @@ begin
 end;
 
 constructor TInboxWin.CreateForUser(AOwner: TComponent; AUser: PUsuario);
+var
+  it: TListColumn;
 begin
   inherited CreateNew(AOwner, 1);
   U := AUser;
@@ -307,19 +373,25 @@ begin
   Position := poScreenCenter; Width := 920; Height := 620;
 
   pnlTop := TPanel.Create(Self); pnlTop.Parent := Self; pnlTop.Align := alTop; pnlTop.Height := 80;
+
   lblBuscar := TLabel.Create(Self); lblBuscar.Parent := pnlTop; lblBuscar.Caption := 'Buscar:'; lblBuscar.Left := 8; lblBuscar.Top := 12;
   edtBuscar := TEdit.Create(Self); edtBuscar.Parent := pnlTop; edtBuscar.Left := 65; edtBuscar.Top := 8; edtBuscar.Width := 200;
+
   lblCampo := TLabel.Create(Self); lblCampo.Parent := pnlTop; lblCampo.Caption := 'Campo:'; lblCampo.Left := 275; lblCampo.Top := 12;
   cmbCampo := TComboBox.Create(Self); cmbCampo.Parent := pnlTop; cmbCampo.Style := csDropDownList;
   cmbCampo.Items.Add('Todos'); cmbCampo.Items.Add('Remitente'); cmbCampo.Items.Add('Asunto'); cmbCampo.ItemIndex := 0;
   cmbCampo.Left := 330; cmbCampo.Top := 8; cmbCampo.Width := 110;
+
   lblEstado := TLabel.Create(Self); lblEstado.Parent := pnlTop; lblEstado.Caption := 'Estado:'; lblEstado.Left := 450; lblEstado.Top := 12;
   cmbEstado := TComboBox.Create(Self); cmbEstado.Parent := pnlTop; cmbEstado.Style := csDropDownList;
   cmbEstado.Items.Add('Todos'); cmbEstado.Items.Add('nuevo'); cmbEstado.Items.Add('leido'); cmbEstado.ItemIndex := 0;
   cmbEstado.Left := 505; cmbEstado.Top := 8; cmbEstado.Width := 100;
+
   chkProg := TCheckBox.Create(Self); chkProg.Parent := pnlTop; chkProg.Caption := 'Solo programados'; chkProg.Left := 615; chkProg.Top := 10;
+
   lblDesde := TLabel.Create(Self); lblDesde.Parent := pnlTop; lblDesde.Caption := 'Desde (YYYY-MM-DD hh:mm):'; lblDesde.Left := 8; lblDesde.Top := 46;
   edtDesde := TEdit.Create(Self); edtDesde.Parent := pnlTop; edtDesde.Left := 200; edtDesde.Top := 42; edtDesde.Width := 150;
+
   lblHasta := TLabel.Create(Self); lblHasta.Parent := pnlTop; lblHasta.Caption := 'Hasta (YYYY-MM-DD hh:mm):'; lblHasta.Left := 360; lblHasta.Top := 46;
   edtHasta := TEdit.Create(Self); edtHasta.Parent := pnlTop; edtHasta.Left := 560; edtHasta.Top := 42; edtHasta.Width := 150;
 
@@ -327,20 +399,25 @@ begin
   btnFiltrar.OnClick := @CargarLista;
 
   pnlBottom := TPanel.Create(Self); pnlBottom.Parent := Self; pnlBottom.Align := alBottom; pnlBottom.Height := 44;
+
   btnVer := TButton.Create(Self); btnVer.Parent := pnlBottom; btnVer.Caption := 'Ver'; btnVer.Left := 8; btnVer.Top := 8; btnVer.Width := 80; btnVer.OnClick := @VerSeleccion;
   btnMarcar := TButton.Create(Self); btnMarcar.Parent := pnlBottom; btnMarcar.Caption := 'Marcar leído/nuevo'; btnMarcar.Left := 96; btnMarcar.Top := 8; btnMarcar.Width := 140; btnMarcar.OnClick := @ToggleLeidoSeleccion;
   btnEliminar := TButton.Create(Self); btnEliminar.Parent := pnlBottom; btnEliminar.Caption := 'Eliminar'; btnEliminar.Left := 244; btnEliminar.Top := 8; btnEliminar.Width := 90; btnEliminar.OnClick := @EliminarSeleccion;
   btnCerrar := TButton.Create(Self); btnCerrar.Parent := pnlBottom; btnCerrar.Caption := 'Cerrar'; btnCerrar.Left := 800; btnCerrar.Top := 8; btnCerrar.Width := 80; btnCerrar.ModalResult := mrClose;
 
   LV := TListView.Create(Self); LV.Parent := Self; LV.Align := alClient; LV.ViewStyle := vsReport; LV.ReadOnly := True; LV.RowSelect := True; LV.GridLines := True;
-  with LV.Columns.Add do begin Caption := 'Id'; Width := 60; end;
-  with LV.Columns.Add do begin Caption := 'Remitente'; Width := 180; end;
-  with LV.Columns.Add do begin Caption := 'Fecha/Hora'; Width := 160; end;
-  with LV.Columns.Add do begin Caption := 'Asunto'; Width := 330; end;
-  with LV.Columns.Add do begin Caption := 'Estado'; Width := 90; end;
-  with LV.Columns.Add do begin Caption := 'Prog'; Width := 60; end;
 
-  edtBuscar.OnChange := @CargarLista; cmbCampo.OnChange := @CargarLista; cmbEstado.OnChange := @CargarLista; chkProg.OnChange := @CargarLista;
+  it := LV.Columns.Add; it.Caption := 'Id'; it.Width := 60;
+  it := LV.Columns.Add; it.Caption := 'Remitente'; it.Width := 180;
+  it := LV.Columns.Add; it.Caption := 'Fecha/Hora'; it.Width := 160;
+  it := LV.Columns.Add; it.Caption := 'Asunto'; it.Width := 330;
+  it := LV.Columns.Add; it.Caption := 'Estado'; it.Width := 90;
+  it := LV.Columns.Add; it.Caption := 'Prog'; it.Width := 60;
+
+  edtBuscar.OnChange := @CargarLista;
+  cmbCampo.OnChange := @CargarLista;
+  cmbEstado.OnChange := @CargarLista;
+  chkProg.OnChange := @CargarLista;
 
   CargarLista(nil);
 end;
@@ -393,8 +470,11 @@ begin
         it.SubItems.Add(DateTimeToStr(M^.Fecha));
         it.SubItems.Add(M^.Asunto);
         it.SubItems.Add(M^.Estado);
-        if M^.Programado then it.SubItems.Add('Sí') else it.SubItems.Add('No');
-        it.Data := M;
+        if M^.Programado then
+    it.SubItems.Add('Sí')
+    else
+    it.SubItems.Add('No');
+          it.Data := M;
       end;
 
       M := M^.Next;
@@ -455,7 +535,7 @@ begin
 
   backup := M^; Dispose(M);
 
-  //Form3.PushTrash(U, backup);
+  User_PushTrash(U, backup);
   CargarLista(nil);
   ShowMessage('Correo movido a Papelera.');
 end;
@@ -497,10 +577,10 @@ begin
   Dest := BuscarUsuarioPorEmail(para);
   if Dest = nil then begin ShowMessage('El destinatario no existe.'); Exit; end;
 
-  //Form3.AppendInbox(Dest, CurrentUser^.Email, asunto, mensaje, Now, False, 'nuevo');
-  //Form3.IncRel(CurrentUser^.Email, Dest^.Email);
-  //ShowMessage('Correo enviado.');
-  //edtPara.Clear; edtAsunto.Clear; memoMsg.Clear;
+  User_AppendInbox(Dest, CurrentUser^.Email, asunto, mensaje, Now, False, 'nuevo');
+  User_IncRel(CurrentUser^.Email, Dest^.Email);
+  ShowMessage('Correo enviado.');
+  edtPara.Clear; edtAsunto.Clear; memoMsg.Clear;
 end;
 
 {--- Programar ---}
@@ -573,7 +653,7 @@ begin
   N^.Destinatario := Dest^.Email;
   N^.Asunto := asunto;
   N^.Mensaje := mensaje;
-  N^.FechaProg := dt;  // 00:00 de ese día
+  N^.FechaProg := dt;
   N^.Next := nil;
 
   if CurrentUser^.ProgTail <> nil then
@@ -595,11 +675,16 @@ begin
   Position := poScreenCenter; Width := 820; Height := 520;
 
   LV := TListView.Create(Self); LV.Parent := Self; LV.Align := alClient; LV.ViewStyle := vsReport; LV.ReadOnly := True; LV.RowSelect := True; LV.GridLines := True;
-  with LV.Columns.Add do begin Caption := 'Id'; Width := 60; end;
-  with LV.Columns.Add do begin Caption := 'Remitente'; Width := 180; end;
-  with LV.Columns.Add do begin Caption := 'Para'; Width := 200; end;
-  with LV.Columns.Add do begin Caption := 'Prog. Fecha'; Width := 180; end;
-  with LV.Columns.Add do begin Caption := 'Asunto'; Width := 180; end;
+  LV.Columns.Add.Caption := 'Id';
+  LV.Columns.Add.Caption := 'Remitente';
+  LV.Columns.Add.Caption := 'Para';
+  LV.Columns.Add.Caption := 'Prog. Fecha';
+  LV.Columns.Add.Caption := 'Asunto';
+  LV.Columns[0].Width := 60;
+  LV.Columns[1].Width := 180;
+  LV.Columns[2].Width := 200;
+  LV.Columns[3].Width := 180;
+  LV.Columns[4].Width := 180;
 
   pnlBtns := TPanel.Create(Self); pnlBtns.Parent := Self; pnlBtns.Align := alBottom; pnlBtns.Height := 44;
   btnProcVencidos := TButton.Create(Self); btnProcVencidos.Parent := pnlBtns; btnProcVencidos.Caption := 'Procesar vencidos (ahora)'; btnProcVencidos.Left := 8; btnProcVencidos.Top := 8; btnProcVencidos.Width := 200; btnProcVencidos.OnClick := @ProcessDue;
@@ -652,8 +737,8 @@ begin
     Dest := BuscarUsuarioPorEmail(C^.Destinatario);
     if Dest <> nil then
     begin
-      //Form3.AppendInbox(Dest, C^.Remitente, C^.Asunto, C^.Mensaje, C^.FechaProg, True, 'nuevo');
-      //Form3.IncRel(C^.Remitente, C^.Destinatario);
+      User_AppendInbox(Dest, C^.Remitente, C^.Asunto, C^.Mensaje, C^.FechaProg, True, 'nuevo');
+      User_IncRel(C^.Remitente, C^.Destinatario);
       Inc(processed);
     end;
     Dispose(C);
@@ -677,10 +762,14 @@ begin
   Position := poScreenCenter; Width := 820; Height := 520;
 
   LV := TListView.Create(Self); LV.Parent := Self; LV.Align := alClient; LV.ViewStyle := vsReport; LV.ReadOnly := True; LV.RowSelect := True; LV.GridLines := True;
-  with LV.Columns.Add do begin Caption := 'Id'; Width := 60; end;
-  with LV.Columns.Add do begin Caption := 'Remitente'; Width := 180; end;
-  with LV.Columns.Add do begin Caption := 'Fecha/Hora'; Width := 160; end;
-  with LV.Columns.Add do begin Caption := 'Asunto'; Width := 360; end;
+  LV.Columns.Add.Caption := 'Id';
+  LV.Columns.Add.Caption := 'Remitente';
+  LV.Columns.Add.Caption := 'Fecha/Hora';
+  LV.Columns.Add.Caption := 'Asunto';
+  LV.Columns[0].Width := 60;
+  LV.Columns[1].Width := 180;
+  LV.Columns[2].Width := 160;
+  LV.Columns[3].Width := 360;
 
   pnlBtns := TPanel.Create(Self); pnlBtns.Parent := Self; pnlBtns.Align := alBottom; pnlBtns.Height := 44;
   btnRestaurar := TButton.Create(Self); btnRestaurar.Parent := pnlBtns; btnRestaurar.Caption := 'Restaurar seleccionado'; btnRestaurar.Left := 8; btnRestaurar.Top := 8; btnRestaurar.Width := 180; btnRestaurar.OnClick := @RestoreSelected;
@@ -740,7 +829,7 @@ begin
     Prev^.Next := P^.Next;
   Dispose(P);
 
-  //Form3.AppendInbox(CurrentUser, M.Remitente, M.Asunto, M.Mensaje, Now, M.Programado, 'nuevo');
+  User_AppendInbox(CurrentUser, M.Remitente, M.Asunto, M.Mensaje, Now, M.Programado, 'nuevo');
   ShowMessage('Restaurado a bandeja.');
   LoadList;
 end;
@@ -759,7 +848,7 @@ begin
   LoadList;
 end;
 
-{--- Contactos (lista circular) ---}
+{--- Contactos ---}
 
 constructor TContactsWin.CreateSimple(AOwner: TComponent);
 begin
@@ -786,8 +875,10 @@ begin
   btnCerrar := TButton.Create(Self); btnCerrar.Parent := pnlTop; btnCerrar.Caption := 'Cerrar'; btnCerrar.Left := 480; btnCerrar.Top := 34; btnCerrar.Width := 90; btnCerrar.ModalResult := mrClose;
 
   LV := TListView.Create(Self); LV.Parent := Self; LV.Align := alClient; LV.ViewStyle := vsReport; LV.ReadOnly := True; LV.RowSelect := True; LV.GridLines := True;
-  with LV.Columns.Add do begin Caption := 'Nombre'; Width := 260; end;
-  with LV.Columns.Add do begin Caption := 'Email'; Width := 360; end;
+  LV.Columns.Add.Caption := 'Nombre';
+  LV.Columns.Add.Caption := 'Email';
+  LV.Columns[0].Width := 260;
+  LV.Columns[1].Width := 360;
 
   LV.OnSelectItem := @OnSelect;
 
@@ -1264,10 +1355,92 @@ begin
   btnRenderAll := TButton.Create(Self); btnRenderAll.Parent := Self; btnRenderAll.Caption := 'Renderizar DOTs (PNG)';
   btnRenderAll.Left := 236; btnRenderAll.Top := 72; btnRenderAll.Width := 200; btnRenderAll.OnClick := @RenderAllPNGs;
 
+  // ---- MERKLE ----
+  btnMerkleRoot := TButton.Create(Self); btnMerkleRoot.Parent := Self;
+  btnMerkleRoot.Caption := 'Merkle Root (Inbox actual)';
+  btnMerkleRoot.Left := 24; btnMerkleRoot.Top := 120; btnMerkleRoot.Width := 200;
+  btnMerkleRoot.OnClick := @BtnMerkleRootClick;
+
+  btnMerkleDOT := TButton.Create(Self); btnMerkleDOT.Parent := Self;
+  btnMerkleDOT.Caption := 'Exportar DOT (Merkle Inbox)';
+  btnMerkleDOT.Left := 236; btnMerkleDOT.Top := 120; btnMerkleDOT.Width := 200;
+  btnMerkleDOT.OnClick  := @BtnMerkleDOTClick;
+
+  // ---- BLOCKCHAIN ----
+  btnBC_DOT := TButton.Create(Self);
+  btnBC_DOT.Parent := Self;
+  btnBC_DOT.Caption := 'Exportar DOT (Blockchain)';
+  btnBC_DOT.Left := 24; btnBC_DOT.Top := 168; btnBC_DOT.Width := 200;
+  btnBC_DOT.OnClick := @BtnBlockchainDOTClick;
+
+  btnBC_PNG := TButton.Create(Self);
+  btnBC_PNG.Parent := Self;
+  btnBC_PNG.Caption := 'Renderizar Blockchain (PNG)';
+  btnBC_PNG.Left := 236; btnBC_PNG.Top := 168; btnBC_PNG.Width := 200;
+  btnBC_PNG.OnClick := @BtnBlockchainPNGClick;
+
+  // Mover el hint para que no se solape
   lblHint := TLabel.Create(Self); lblHint.Parent := Self;
-  lblHint.Caption := 'Archivos en "Reportes". Para PNGs instala Graphviz: sudo apt install graphviz -y';
-  lblHint.Left := 24; lblHint.Top := 120; lblHint.AutoSize := True;
+  lblHint.Caption := 'Archivos en "Reportes"';
+  lblHint.Left := 24; lblHint.Top := 208; // <- antes estaba en 120
+  lblHint.AutoSize := True;
 end;
+
+
+procedure TReportsWin.BtnMerkleRootClick(Sender: TObject);
+var
+  rootHex: string;
+begin
+  if (CurrentUser = nil) then
+  begin
+    ShowMessage('Inicie sesión para calcular el Merkle Root de su bandeja.');
+    Exit;
+  end;
+
+  rootHex := MerkleRoot_FromInbox(CurrentUser);
+  if rootHex = '' then
+    ShowMessage('Inbox vacío: no hay Merkle Root.')
+  else
+    ShowMessage('Merkle Root (Inbox): ' + rootHex);
+end;
+
+procedure TReportsWin.BtnBlockchainPNGClick(Sender: TObject);
+var
+  dir, dotPath, pngPath: string;
+begin
+  dir := ReportDir;
+  dotPath := dir + PathDelim + 'blockchain.dot';
+  pngPath := dir + PathDelim + 'blockchain.png';
+
+  if not FileExists(dotPath) then BtnBlockchainDOTClick(nil);
+
+  if Blockchain_RenderDOTToPNG(dotPath, pngPath) then
+    if not OpenDocument(pngPath) then
+      ShowMessage('PNG generado: ' + pngPath)
+  else
+    ShowMessage('No se pudo renderizar. Instala graphviz (dot).');
+end;
+
+
+
+procedure TReportsWin.BtnMerkleDOTClick(Sender: TObject);
+var
+  dir, dotPath: string;
+begin
+  if (CurrentUser = nil) then
+  begin
+    ShowMessage('Inicie sesión para exportar el árbol Merkle.');
+    Exit;
+  end;
+
+  dir := ReportDir; // ya existe en esta clase
+  dotPath := dir + PathDelim + 'merkle_inbox.dot';
+
+  Merkle_SaveDOT_FromInbox(CurrentUser, dotPath);
+  ShowMessage('DOT exportado: ' + dotPath + LineEnding +
+              'Para PNG: dot -Tpng merkle_inbox.dot -o merkle_inbox.png');
+end;
+
 
 procedure TReportsWin.GenReports(Sender: TObject);
 var
@@ -1542,6 +1715,27 @@ begin
   end;
 end;
 
+procedure TReportsWin.BtnBlockchainDOTClick(Sender: TObject);
+var
+  dir, dotPath: string;
+begin
+  dir := ReportDir;
+  dotPath := dir + PathDelim + 'blockchain.dot';
+
+  // Usa la variable global de uBlockchain
+  Blockchain_SaveDOT(BlockchainHead, dotPath);
+
+  ShowMessage('DOT exportado: ' + dotPath);
+end;
+
+
+
+
+
+
+
+
+
 procedure TReportsWin.RenderAllPNGs(Sender: TObject);
 var
   dir, safe: string;
@@ -1559,7 +1753,7 @@ begin
   ShowMessage('PNGs generados');
 end;
 
-{--- FAVORITOS (Árbol B) ---}
+{--- Favoritos (Árbol B) ---}
 
 constructor TFavoritesWin.CreateForUser(AOwner: TComponent; AUser: PUsuario);
 begin
@@ -1572,8 +1766,10 @@ begin
   LV.Parent := Self; LV.Align := alClient;
   LV.ViewStyle := vsReport; LV.ReadOnly := True; LV.RowSelect := True; LV.GridLines := True;
   LV.CheckBoxes := True;
-  with LV.Columns.Add do begin Caption := 'Id'; Width := 60; end;
-  with LV.Columns.Add do begin Caption := 'Asunto'; Width := 680; end;
+  LV.Columns.Add.Caption := 'Id';
+  LV.Columns.Add.Caption := 'Asunto';
+  LV.Columns[0].Width := 60;
+  LV.Columns[1].Width := 680;
 
   pnlBottom := TPanel.Create(Self);
   pnlBottom.Parent := Self; pnlBottom.Align := alBottom; pnlBottom.Height := 44;
@@ -1592,6 +1788,17 @@ begin
   btnGuardar.Parent := pnlBottom; btnGuardar.Caption := 'Guardar en Árbol B y Graficar';
   btnGuardar.Left := 284; btnGuardar.Top := 8; btnGuardar.Width := 220;
   btnGuardar.OnClick := @SaveFavorites;
+
+
+  btnDescargar := TButton.Create(Self);
+  btnDescargar.Parent := pnlBottom;
+  btnDescargar.Caption := 'Descargar (LZW)';
+  btnDescargar.Left := 620;   // ajusta si choca con otros
+  btnDescargar.Top := 8;
+  btnDescargar.Width := 120;
+  btnDescargar.OnClick := @DownloadSelected;
+
+
 
   btnVerPNG := TButton.Create(Self);
   btnVerPNG.Parent := pnlBottom; btnVerPNG.Caption := 'Abrir PNG';
@@ -1686,6 +1893,46 @@ begin
                 'Si deseas PNG instala Graphviz: sudo apt install graphviz -y');
 end;
 
+procedure TFavoritesWin.DownloadSelected(Sender: TObject);
+var
+  it: TListItem;
+  M: uTypes.PMail;
+  msg, dir, path, data: string;
+begin
+  it := LV.Selected;
+  if (it = nil) or (it.Data = nil) then
+  begin
+    ShowMessage('Selecciona un correo de la lista para descargar.');
+    Exit;
+  end;
+
+  M := uTypes.PMail(it.Data);
+  msg := M^.Mensaje;
+
+  if Trim(msg) = '' then
+  begin
+    ShowMessage('Este correo no tiene contenido en "Mensaje".');
+    Exit;
+  end;
+
+  dir := IncludeTrailingPathDelimiter(GetCurrentDir) + 'Reportes';
+  if not DirectoryExists(dir) then CreateDir(dir);
+  path := Format('%s%scorreo_%d_lzw.txt', [dir, PathDelim, M^.Id]);
+
+  data := LZW_CompressToText(msg);
+  with TStringList.Create do
+  try
+    Text := data;
+    SaveToFile(path);
+  finally
+    Free;
+  end;
+
+  ShowMessage('Mensaje comprimido (LZW) guardado en: ' + path);
+end;
+
+
+
 procedure TFavoritesWin.OpenPNG(Sender: TObject);
 var
   Dir, PngPath: string;
@@ -1741,10 +1988,14 @@ begin
 
   LV := TListView.Create(Self); LV.Parent := Self; LV.Align := alClient;
   LV.ViewStyle := vsReport; LV.ReadOnly := True; LV.RowSelect := True; LV.GridLines := True;
-  with LV.Columns.Add do begin Caption := 'ID'; Width := 60; end;
-  with LV.Columns.Add do begin Caption := 'Remitente'; Width := 220; end;
-  with LV.Columns.Add do begin Caption := 'Destinatario'; Width := 220; end;
-  with LV.Columns.Add do begin Caption := 'Asunto'; Width := 360; end;
+  LV.Columns.Add.Caption := 'ID';
+  LV.Columns.Add.Caption := 'Remitente';
+  LV.Columns.Add.Caption := 'Destinatario';
+  LV.Columns.Add.Caption := 'Asunto';
+  LV.Columns[0].Width := 60;
+  LV.Columns[1].Width := 220;
+  LV.Columns[2].Width := 220;
+  LV.Columns[3].Width := 360;
   LV.OnSelectItem := @OnSelect;
 
   pnlBottom := TPanel.Create(Self); pnlBottom.Parent := Self; pnlBottom.Align := alBottom; pnlBottom.Height := 48;
@@ -1756,6 +2007,14 @@ begin
   btnExportDOT := TButton.Create(Self); btnExportDOT.Parent := pnlBottom; btnExportDOT.Caption := 'Exportar DOT/PNG'; btnExportDOT.Left := 452; btnExportDOT.Top := 8; btnExportDOT.Width := 140; btnExportDOT.OnClick := @ExportDOT;
   btnVerPNG := TButton.Create(Self); btnVerPNG.Parent := pnlBottom; btnVerPNG.Caption := 'Abrir PNG'; btnVerPNG.Left := 596; btnVerPNG.Top := 8; btnVerPNG.Width := 100; btnVerPNG.OnClick := @VerPNG;
   btnCerrar := TButton.Create(Self); btnCerrar.Parent := pnlBottom; btnCerrar.Caption := 'Cerrar'; btnCerrar.Left := 804; btnCerrar.Top := 8; btnCerrar.Width := 80; btnCerrar.ModalResult := mrClose;
+  btnDescargar := TButton.Create(Self);
+  btnDescargar.Parent := pnlBottom;
+  btnDescargar.Caption := 'Descargar (LZW)';
+  btnDescargar.Left := 700;  // ajusta si es necesario
+  btnDescargar.Top := 8;
+  btnDescargar.Width := 120;
+  btnDescargar.OnClick := @DescargarBorrador;
+
 
   LoadList(nil);
 end;
@@ -1801,6 +2060,55 @@ begin
     LV.Items.EndUpdate;
   end;
 end;
+
+procedure TDraftsWin.DescargarBorrador(Sender: TObject);
+var
+  id: Integer;
+  D: TDraft;
+  dir, path, data: string;
+begin
+  if (LV.Selected = nil) then
+  begin
+    ShowMessage('Selecciona un borrador en la lista.');
+    Exit;
+  end;
+
+  if not TryStrToInt(LV.Selected.Caption, id) then
+  begin
+    ShowMessage('ID de borrador inválido.');
+    Exit;
+  end;
+
+  if (Drafts = nil) or (not Drafts.Search(id, D)) then
+  begin
+    ShowMessage('No se encontró el borrador.');
+    Exit;
+  end;
+
+  if Trim(D.Mensaje) = '' then
+  begin
+    ShowMessage('Este borrador no tiene contenido en "Mensaje".');
+    Exit;
+  end;
+
+  dir := IncludeTrailingPathDelimiter(GetCurrentDir) + 'Reportes';
+  if not DirectoryExists(dir) then CreateDir(dir);
+  path := Format('%s%sborrador_%d_lzw.txt', [dir, PathDelim, D.ID]);
+
+  data := LZW_CompressToText(D.Mensaje);
+  with TStringList.Create do
+  try
+    Text := data;
+    SaveToFile(path);
+  finally
+    Free;
+  end;
+
+  ShowMessage('Borrador comprimido (LZW) guardado en: ' + path);
+end;
+
+
+
 
 function TDraftsWin.ReadDraftFromForm(out D: TDraft): Boolean;
 
@@ -1884,8 +2192,8 @@ begin
   Dest := BuscarUsuarioPorEmail(D.Destinatario);
   if Dest = nil then begin ShowMessage('El destinatario no existe.'); Exit; end;
 
-  //Form3.AppendInbox(Dest, D.Remitente, D.Asunto, D.Mensaje, Now, False, 'nuevo');
-  //Form3.IncRel(D.Remitente, D.Destinatario);
+  User_AppendInbox(Dest, D.Remitente, D.Asunto, D.Mensaje, Now, False, 'nuevo');
+  User_IncRel(D.Remitente, D.Destinatario);
   Drafts.Delete(D.ID);
 
   ShowMessage('Correo enviado desde borrador.');
@@ -1959,8 +2267,10 @@ begin
   LV.Parent := Self; LV.Align := alClient;
   LV.ViewStyle := vsReport; LV.ReadOnly := True; LV.RowSelect := True; LV.GridLines := True;
   LV.CheckBoxes := True;
-  with LV.Columns.Add do begin Caption := 'Nombre'; Width := 260; end;
-  with LV.Columns.Add do begin Caption := 'Email'; Width := 360; end;
+  LV.Columns.Add.Caption := 'Nombre';
+  LV.Columns.Add.Caption := 'Email';
+  LV.Columns[0].Width := 260;
+  LV.Columns[1].Width := 360;
 
   pnlBtns := TPanel.Create(Self); pnlBtns.Parent := Self; pnlBtns.Align := alBottom; pnlBtns.Height := 48;
 
@@ -2034,7 +2344,6 @@ begin
     Prev := C; C := C^.Next;
   until C = H;
 end;
-
 
 procedure TContactsBulkDelWin.DeleteChecked(Sender: TObject);
 var
@@ -2133,8 +2442,13 @@ begin
 end;
 
 procedure TForm3.Button12Click(Sender: TObject);
+var dir: string;
 begin
-
+  // Abrir carpeta de Reportes (útil para DOT/PNG/CSV)
+  dir := IncludeTrailingPathDelimiter(GetCurrentDir) + 'Reportes';
+  if not DirectoryExists(dir) then CreateDir(dir);
+  if not OpenDocument(dir) then
+    ShowMessage('Carpeta: ' + dir);
 end;
 
 procedure TForm3.Button13Click(Sender: TObject);

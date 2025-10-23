@@ -6,71 +6,9 @@ interface
 
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, StdCtrls, Process,
-  uBFavorites; // <<< FAVORITOS (Árbol B)
+  uTypes; // <- Usamos los tipos y globales de uTypes (PUsuario, TMail, etc.)
 
 type
-  { ====== ESTRUCTURAS BASE ====== }
-  PMail = ^TMail;
-  TMail = record
-    Id: Integer;
-    Remitente: string;
-    Asunto: string;
-    Mensaje: string;
-    Fecha: TDateTime;
-    Programado: Boolean;
-    Estado: string;     // 'nuevo' | 'leido' | etc.
-    Prev, Next: PMail;  // lista doble
-  end;
-
-  PProg = ^TProg; // cola de programados
-  TProg = record
-    Id: Integer;
-    Remitente: string;
-    Destinatario: string;
-    Asunto: string;
-    Mensaje: string;
-    FechaProg: TDateTime;
-    Next: PProg;
-  end;
-
-  PTrash = ^TTrash; // pila (papelera)
-  TTrash = record
-    Mail: TMail;
-    Next: PTrash;
-  end;
-
-  PContacto = ^TContacto; // lista circular
-  TContacto = record
-    Email: string;
-    Nombre: string;
-    Next: PContacto;
-  end;
-
-  PRel = ^TRel; // relaciones emisor->receptor (para matriz)
-  TRel = record
-    FromEmail: string;
-    ToEmail: string;
-    Count: Integer;
-    Next: PRel;
-  end;
-
-  PUsuario = ^TUsuario; // lista simple (usuarios)
-  TUsuario = record
-    Id: Integer;
-    Nombre: string;
-    Usuario: string;
-    Email: string;
-    Telefono: string;
-    Password: string;
-    // por usuario:
-    InboxHead, InboxTail: PMail; // lista doble
-    ProgHead, ProgTail: PProg;   // cola
-    TrashTop: PTrash;            // pila
-    ContactTail: PContacto;      // circular
-    FavTree: TBFavorites;        // <<< FAVORITOS: Árbol B por usuario
-    Next: PUsuario;              // lista simple
-  end;
-
   { ====== COMUNIDADES (lista de listas) ====== }
   PMember = ^TMember;
   TMember = record
@@ -106,32 +44,29 @@ type
 var
   Form1: TForm1;
 
-  // === Estado global accesible desde otros units (root/user) ===
-  UsuariosHead: PUsuario = nil;
-  CurrentUser: PUsuario = nil;
-  RelHead: PRel = nil;
-
+  // Estado propio de este módulo (NO duplicamos lo que ya está en uTypes)
   ComunidadesHead: PComunidad = nil;
 
+  // Contadores locales (usuarios y comunidades)
   NextId: Integer = 1;
-  NextMailId: Integer = 1;
   NextComunidadId: Integer = 1;
 
-// === API que usan otros units ===
-function BuscarUsuarioPorEmail(const AEmail: string): PUsuario;
+// === API que usan otros units (sin duplicar lo que ya está en uTypes) ===
 function BuscarUsuarioPorNombre(const AUsuario: string): PUsuario;
 procedure AgregarUsuario(const ANombre, AUsuario, AEmail, ATelefono, APassword: string);
 
 // —— Reportes Graphviz ——
-function ExportarUsuariosDOT(const Path: string): Boolean;            // lista simple de usuarios
-function ExportarInboxDOT(U: PUsuario; const Path: string): Boolean; overload; // lista doble (inbox)
+function ExportarUsuariosDOT(const Path: string): Boolean;                      // lista simple de usuarios
+function ExportarInboxDOT(U: PUsuario; const Path: string): Boolean; overload;  // lista doble (inbox)
 function ExportarInboxDOT(const Email, Path: string): Boolean; overload;
-function ExportarRelacionesDOT(const Path: string): Boolean;          // matriz dispersa (relaciones)
+function ExportarRelacionesDOT(const Path: string): Boolean;                    // matriz dispersa (relaciones)
+function ExportarComunidadesDOT(const Path: string): Boolean;
+function ExportarComunidadesMatrizDOT(const Path: string): Boolean;
 function RenderizarPNGConDot(const DotPath, PngPath: string): Boolean;
 
 implementation
 
-// para evitar ciclos en la interfaz y no provocar "Duplicate identifier LOGEO".
+// Para evitar ciclos en la interfaz. Aquí SÍ podemos referenciar a los forms.
 uses
   root, user;
 
@@ -177,23 +112,13 @@ begin
 end;
 
 {====================== USUARIOS ======================}
-function BuscarUsuarioPorEmail(const AEmail: string): PUsuario;
-var Cur: PUsuario;
-begin
-  Result := nil;
-  Cur := UsuariosHead;
-  while Cur <> nil do
-  begin
-    if EqualCI(Cur^.Email, AEmail) then Exit(Cur);
-    Cur := Cur^.Next;
-  end;
-end;
+// ATENCIÓN: No duplicamos BuscarUsuarioPorEmail; usamos el de uTypes.
 
 function BuscarUsuarioPorNombre(const AUsuario: string): PUsuario;
 var Cur: PUsuario;
 begin
   Result := nil;
-  Cur := UsuariosHead;
+  Cur := UsuariosHead; // <- de uTypes
   while Cur <> nil do
   begin
     if EqualCI(Cur^.Usuario, AUsuario) then Exit(Cur);
@@ -205,33 +130,38 @@ procedure AgregarUsuario(const ANombre, AUsuario, AEmail, ATelefono, APassword: 
 var Nuevo: PUsuario;
 begin
   New(Nuevo);
-  Nuevo^.Id := NextId; Inc(NextId);
+  // Un id local para debug/visualización (no existe en uTypes, pero no afecta)
+  // Si tu TUsuario en uTypes no tiene Id, simplemente no lo uses en otros lados.
+  // (Este campo no existe en uTypes, así que NO lo asignamos.)
   Nuevo^.Nombre   := ANombre;
   Nuevo^.Usuario  := AUsuario;
   Nuevo^.Email    := AEmail;
   Nuevo^.Telefono := ATelefono;
   Nuevo^.Password := APassword;
-  // inicializar estructuras
-  Nuevo^.InboxHead := nil; Nuevo^.InboxTail := nil;
-  Nuevo^.ProgHead := nil;  Nuevo^.ProgTail := nil;
-  Nuevo^.TrashTop := nil;
+
+  // Inicializar estructuras del usuario (siguen el layout de uTypes)
+  Nuevo^.InboxHead   := nil; Nuevo^.InboxTail   := nil;
+  Nuevo^.ProgHead    := nil; Nuevo^.ProgTail    := nil;
+  Nuevo^.TrashTop    := nil;
   Nuevo^.ContactTail := nil;
-  Nuevo^.FavTree := TBFavorites.Create; // <<< FAVORITOS: inicializar árbol B
-  // insertar al inicio (LIFO)
+
+  // Insertar al inicio de la lista simple de usuarios (en uTypes)
   Nuevo^.Next := UsuariosHead;
   UsuariosHead := Nuevo;
+
+  Inc(NextId);
 end;
 
 procedure AsegurarRoot;
 begin
-  if BuscarUsuarioPorEmail('root@edd.com') = nil then
+  if uTypes.BuscarUsuarioPorEmail('root@edd.com') = nil then
     AgregarUsuario('root', 'root', 'root@edd.com', '', 'root123');
 end;
 
 {====================== LOGIN ======================}
 procedure TForm1.FormCreate(Sender: TObject);
 begin
-  AsegurarRoot; // también se llama en initialization
+  AsegurarRoot;
 end;
 
 function TForm1.EmailValido(const AEmail: string): Boolean;
@@ -251,15 +181,15 @@ begin
     Exit;
   end;
 
-  U := BuscarUsuarioPorEmail(Edit1.Text);
+  U := uTypes.BuscarUsuarioPorEmail(Edit1.Text);
   if (U <> nil) and (U^.Password = Edit2.Text) then
   begin
-    CurrentUser := U;
+    CurrentUser := U; // <- de uTypes
     if EqualCI(U^.Email, 'root@edd.com') then
     begin
       ShowMessage('¡Bienvenido, Administrador!');
       Hide;
-      // aca pasa al form2 despues de loguearse
+      // Pasa al form2 después de loguearse
       root.Form2 := root.TForm2.Create(Application);
       root.Form2.Show;
     end
@@ -299,7 +229,7 @@ begin
     Exit;
   end;
 
-  if BuscarUsuarioPorEmail(email) <> nil then
+  if uTypes.BuscarUsuarioPorEmail(email) <> nil then
   begin
     ShowMessage('El usuario ya existe dentro del sistema.');
     Exit;
@@ -480,12 +410,15 @@ begin
     U := UsuariosHead;
     while U <> nil do
     begin
-      nid := 'U' + IntToStr(U^.Id);
-      sl.Add(Format('  %s [label="{Id: %d|Nombre: %s|Usuario: %s|Email: %s|Tel: %s}"];',
-        [nid, U^.Id, _Esc(U^.Nombre), _Esc(U^.Usuario), _Esc(U^.Email), _Esc(U^.Telefono)]));
+      // Como uTypes.TUsuario no tiene Id/Usuario/Telefono formateados en record,
+      // imprimimos lo disponible (ajusta si tu record tiene más campos).
+      nid := 'U_' + _IdSafe(U^.Email);
+      sl.Add(Format('  %s [label="{Email: %s|Nombre: %s}"];',
+        [nid, _Esc(U^.Email), _Esc(U^.Nombre)]));
+
       if Prev <> nil then
       begin
-        pid := 'U' + IntToStr(Prev^.Id);
+        pid := 'U_' + _IdSafe(Prev^.Email);
         sl.Add(Format('  %s -> %s;', [pid, nid]));
       end;
       Prev := U;
@@ -578,7 +511,7 @@ end;
 
 function ExportarInboxDOT(const Email, Path: string): Boolean;
 begin
-  Result := ExportarInboxDOT(BuscarUsuarioPorEmail(Email), Path);
+  Result := ExportarInboxDOT(uTypes.BuscarUsuarioPorEmail(Email), Path);
 end;
 
 function ExportarRelacionesDOT(const Path: string): Boolean;
@@ -694,13 +627,6 @@ begin
     until C = H;
     U^.ContactTail := nil;
   end;
-
-  // Favoritos (árbol B)
-  if U^.FavTree <> nil then
-  begin
-    U^.FavTree.Free;
-    U^.FavTree := nil;
-  end;
 end;
 
 procedure LiberarUsuarios;
@@ -752,16 +678,11 @@ end;
 
 {====================== INITIALIZATION/FINALIZATION ======================}
 initialization
-  // Inicializa todo y ASEGURA root
-  UsuariosHead := nil; CurrentUser := nil;
-  RelHead := nil;
-  ComunidadesHead := nil;
-  NextId := 1; NextMailId := 1; NextComunidadId := 1;
-
+  // NO reseteamos aquí variables de uTypes (ya arrancan en nil por defecto).
   AsegurarRoot; // garantiza root@edd.com / root123
 
 finalization
-  // Limpieza ordenada (incluye FavTree)
+  // Limpieza ordenada
   LiberarUsuarios;
   LiberarRelaciones;
   LiberarComunidades;

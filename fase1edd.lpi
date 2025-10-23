@@ -100,6 +100,7 @@
         <Filename Value="contronlogueo.pas"/>
         <IsPartOfProject Value="True"/>
         <ComponentName Value="Form6"/>
+        <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
         <UnitName Value="contronLogueo"/>
       </Unit>
@@ -111,6 +112,26 @@
         <Filename Value="uloginaudit.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="uLoginAudit"/>
+      </Unit>
+      <Unit>
+        <Filename Value="utypes.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="uTypes"/>
+      </Unit>
+      <Unit>
+        <Filename Value="uavldrafts.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="uAVLDrafts"/>
+      </Unit>
+      <Unit>
+        <Filename Value="umerkle.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="uMerkle"/>
+      </Unit>
+      <Unit>
+        <Filename Value="ublockchain.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="uBlockchain"/>
       </Unit>
     </Units>
   </ProjectOptions>
