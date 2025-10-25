@@ -6,8 +6,7 @@ interface
 
 uses
   Classes, SysUtils, Forms, Controls, Graphics, Dialogs, StdCtrls,
-  logeo,         // <-- aquí está CurrentUser
-  uComunidades;  // API de comunidades
+  uComunidades, uTypes; // <- CurrentUser ahora está en uTypes
 
 type
   { TForm5 }
@@ -46,9 +45,9 @@ begin
   nomCom  := Trim(txtcomunidad.Text);
   msg     := Trim(txtmensaje.Lines.Text);
 
-  // Obtener el email del usuario logueado desde el unit 'logeo'
-  if (logeo.CurrentUser <> nil) then
-    miEmail := Trim(logeo.CurrentUser^.Email)
+  // Obtener el email del usuario logueado (desde uTypes)
+  if (uTypes.CurrentUser <> nil) then
+    miEmail := Trim(uTypes.CurrentUser^.Email)
   else
     miEmail := '';
 

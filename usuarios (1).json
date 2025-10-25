@@ -1,0 +1,116 @@
+{
+  "usuarios": [
+    {
+      "id": 1,
+      "nombre": "Luis Garcia",
+      "usuario": "lgarcia",
+      "password": "12345",
+      "email": "lgarcia@edd.com",
+      "telefono": "12345678"
+    },
+    {
+      "id": 2,
+      "nombre": "Marcos Itzep",
+      "usuario": "mitzep",
+      "password": "12345",
+      "email": "mitzep@edd.com",
+      "telefono": "87654321"
+    },
+    {
+      "id": 3,
+      "nombre": "Greg Kroah-Hartman",
+      "usuario": "gkroah-hartman",
+      "password": "12345",
+      "email": "gkroah-hartman@edd.com",
+      "telefono": "31628954"
+    },
+    {
+      "id": 4,
+      "nombre": "Mark Shuttleworth",
+      "usuario": "mshuttleworth",
+      "password": "12345",
+      "email": "mshuttleworth@edd.com",
+      "telefono": "76018423"
+    },
+    {
+      "id": 5,
+      "nombre": "Steven Mejia",
+      "usuario": "smejia",
+      "password": "12345",
+      "email": "smejia@edd.com",
+      "telefono": "23419875"
+    },
+    {
+      "id": 6,
+      "nombre": "Brian Fox",
+      "usuario": "bfox",
+      "password": "12345",
+      "email": "bfox@edd.com",
+      "telefono": "64578231"
+    },
+    {
+      "id": 7,
+      "nombre": "Jon Corbet",
+      "usuario": "jcorbet",
+      "password": "12345",
+      "email": "jcorbet@edd.com",
+      "telefono": "75849231"
+    },
+    {
+      "id": 8,
+      "nombre": "Karen Sandler",
+      "usuario": "ksandler",
+      "password": "12345",
+      "email": "ksandler@edd.com",
+      "telefono": "89514362"
+    },
+    {
+      "id": 9,
+      "nombre": "Andre Baker",
+      "usuario": "mbaker",
+      "password": "12345",
+      "email": "Andre@edd.com",
+      "telefono": "19384756"
+    },
+    {
+      "id": 10,
+      "nombre": "Ian Murdock",
+      "usuario": "imurdock",
+      "password": "12345",
+      "email": "imurdock@edd.com",
+      "telefono": "41235678"
+    },    
+    {
+      "id": 10,
+      "nombre": "Karen Sandler",
+      "usuario": "ksandler",
+      "password": "12345",
+      "email": "ksandler@edd.com",
+      "telefono": "89514362"
+    },
+    {
+      "id": 11,
+      "nombre": "Linus Torvalds",
+      "usuario": "ltorvalds",
+      "password": "12345",
+      "email": "ltorvalds@edd.com",
+      "telefono": "55667788"
+    },
+    {
+      "id": 12,
+      "nombre": "Richard Stallman",
+      "usuario": "rstallman",
+      "password": "12345",
+      "email": "rstallman@edd.com",
+      "telefono": "66778899"
+    },
+    {
+      "id": 13,
+      "nombre": "Ada Lovelace",
+      "usuario": "alovelace",
+      "password": "12345",
+      "email": "jcorbet@edd.com",
+      "telefono": "66778899"
+    }
+  ]
+}

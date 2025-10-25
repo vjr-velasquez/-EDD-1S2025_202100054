@@ -5,15 +5,25 @@ unit uUsuariosAPI_VictorAdapter;
 interface
 
 uses
-  SysUtils, uUsuariosAPI, logeo; // unidad de Victor
+  SysUtils, uTypes;  // <-- IMPORTANTE: aquí está BuscarUsuarioPorEmail oficial
 
-function Victor_UserExists(const Email: String): Boolean;
+// Wrapper con el mismo nombre para no tocar el resto del proyecto:
+function BuscarUsuarioPorEmail(const AEmail: string): PUsuario;
+
+// (opcional) helper alternativo si prefieres llamarlo distinto
+function GetUsuarioPorEmail(const Email: string): PUsuario;
 
 implementation
 
-function Victor_UserExists(const Email: String): Boolean;
+function BuscarUsuarioPorEmail(const AEmail: string): PUsuario;
 begin
-  Result := BuscarUsuarioPorEmail(Email) <> nil;
+  Result := uTypes.BuscarUsuarioPorEmail(AEmail);
+end;
+
+function GetUsuarioPorEmail(const Email: string): PUsuario;
+begin
+  Result := uTypes.BuscarUsuarioPorEmail(Email);
 end;
 
 end.
+
